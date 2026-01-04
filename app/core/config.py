@@ -3,12 +3,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DBSERVER = os.getenv("DBSERVER")
-DBUSER = os.getenv("DBUSER")
-DBPWD = os.getenv("DBPWD")
-DBHOST = os.getenv("DBHOST")
-DBPORT = os.getenv("DBPORT")
-DBNAME = os.getenv("DBNAME")
+# DBSERVER = os.getenv("DBSERVER")
+# DBUSER = os.getenv("DBUSER")
+# DBPWD = os.getenv("DBPWD")
+# DBHOST = os.getenv("DBHOST")
+# DBPORT = os.getenv("DBPORT")
+# DBNAME = os.getenv("DBNAME")
 # DBURL = f"{DBSERVER}://{DBUSER}:{DBPWD}@{DBHOST}:{DBPORT}/{DBNAME}"
 DBURL = os.getenv("DBURL")
 

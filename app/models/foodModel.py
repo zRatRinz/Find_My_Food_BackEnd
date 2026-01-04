@@ -19,7 +19,7 @@ class FoodModel(SQLModel, table=True):
     is_public: bool
     is_active: bool
 
-    ingredients: list[IngredientModel] = Relationship(
+    ingredients: list["IngredientModel"] = Relationship(
         back_populates="foods", 
         link_model=FoodWithIngredientModel
     )

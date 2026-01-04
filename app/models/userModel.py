@@ -8,7 +8,7 @@ class LoginAccountModel(SQLModel, table=True):
     password: str
     last_login: datetime | None = None
 
-    user_info: UserInfoModel = Relationship(back_populates="login_account")
+    user_info: "UserInfoModel" = Relationship(back_populates="login_account")
 
 class UserInfoModel(SQLModel, table=True):
     __tablename__ = "mas_user"
@@ -22,4 +22,4 @@ class UserInfoModel(SQLModel, table=True):
     create_date: datetime = Field(default_factory=datetime.now)
     update_date: datetime = Field(default_factory=datetime.now)
 
-    login_account: LoginAccountModel = Relationship(back_populates="user_info")
+    login_account: "LoginAccountModel" = Relationship(back_populates="user_info")

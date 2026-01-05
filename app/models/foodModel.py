@@ -1,6 +1,11 @@
 from sqlmodel import SQLModel, Field, Column, DateTime, func, Relationship
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+def get_thai_now():
+    thai_time = datetime.now(ZoneInfo("Asia/Bangkok"))
+    return thai_time.replace(tzinfo=None)
 
 class FoodWithIngredientModel(SQLModel, table=True):
     __tablename__ = "map_foodingredient"
@@ -13,7 +18,7 @@ class FoodModel(SQLModel, table=True):
     food_id: Optional[int] = Field(default=None,primary_key=True)
     food:str
     image_url: Optional[str] = None
-    create_date: datetime = Field(default_factory=datetime.now)
+    create_date: datetime = Field(default_factory=get_thai_now)
     update_date: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     owner_id: Optional[int] = None
     is_public: bool

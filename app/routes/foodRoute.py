@@ -5,11 +5,19 @@ from app.services import foodService
 from app.schemas.foodDTO import FoodDTO, FoodWithIngredientDTO, CreateNewFoodModel
 from app.schemas.response import StandardResponse
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 router = APIRouter(prefix="/foods", tags=["foods"])
 
 @router.get("/")
 def root():
-    return {"message":"555"}
+    # return {"message":"555"}
+    return {
+        "message":datetime.now(ZoneInfo("Asia/Bangkok")),
+        "now":datetime.now()
+        }
+
 
 @router.get("/getAllFood", response_model=StandardResponse[list[FoodDTO]])
 def get_all_food_async(db:Session = Depends(database.get_db)):

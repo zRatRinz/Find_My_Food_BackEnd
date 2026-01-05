@@ -10,9 +10,9 @@ class FoodDTO(SQLModel):
     image_url: Optional[str] = None
     # create_date: datetime = Field(sa_column=Column(DateTime(timezone=True),server_default=func.now()))
     # update_date: datetime = Field(sa_column=Column(DateTime(timezone=True),server_default=func.now(),onupdate=func.now()))
-    owner_id: Optional[int] = None
-    is_public: bool
-    is_active: bool
+    # owner_id: Optional[int] = None
+    # is_public: bool
+    # is_active: bool
 
 class IngredientDTO(SQLModel):
     ingredient_id: int

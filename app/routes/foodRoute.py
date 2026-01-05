@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile, Form
 from sqlmodel import Session
 from app.db import database
 from app.services import foodService
@@ -42,9 +42,15 @@ def get_food_ingredient_by_id_async(food_id:int ,db:Session = Depends(database.g
         return StandardResponse.fail(message=str(ex))
     
 @router.post("/createNewFood")
-def create_new_food(request: CreateNewFoodModel, db:Session = Depends(database.get_db)):
+def create_new_food(food:str = Form(...), is_public: bool = Form(True), is_active: bool = Form(True), file: UploadFile = File(...), db:Session = Depends(database.get_db)):
     try:
-        response = foodService.create_new_food(db, request)
+
+        request = CreateNewFoodModel(
+            food=food,
+            is_public=is_public,
+            is_active=is_active,
+        )
+        response = foodService.create_new_food(db, request, file)
         if not response:
             return StandardResponse.fail(message="บันทึกไม่สำเร็จ")
         return StandardResponse.success()

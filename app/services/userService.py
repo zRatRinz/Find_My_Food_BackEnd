@@ -75,7 +75,7 @@ def get_user_info(user_id: int, db: Session):
     return result
 
 def update_user_image(current_user: UserInfoModel, file: UploadFile, db: Session):
-    image_url = cloudinary.upload_image_to_cloudinary(current_user.user_id, file)
+    image_url = cloudinary.upload_user_image_to_cloudinary(current_user.user_id, file)
     if not image_url:
         return ("fail", "Upload รูปภาพไม่สำเร็จ")
 

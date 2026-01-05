@@ -13,8 +13,8 @@ class FoodModel(SQLModel, table=True):
     food_id: Optional[int] = Field(default=None,primary_key=True)
     food:str
     image_url: Optional[str] = None
-    create_date: datetime = Field(sa_column=Column(DateTime(timezone=True),server_default=func.now()))
-    update_date: datetime = Field(sa_column=Column(DateTime(timezone=True),server_default=func.now(),onupdate=func.now()))
+    create_date: datetime = Field(default_factory=datetime.now)
+    update_date: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     owner_id: Optional[int] = None
     is_public: bool
     is_active: bool

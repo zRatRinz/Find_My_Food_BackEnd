@@ -65,12 +65,6 @@ async def login(request: Annotated[OAuth2PasswordRequestForm, Depends()], db:Ses
             token_type = "bearer",
             data = user_info_data
         )
-        # return StandardResponse.success(data=UserLoginResponseDTO(
-        #         access_token=access_token, 
-        #         token_type="bearer", 
-        #         user_info=user_info_data
-        #     )
-        # )
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
 

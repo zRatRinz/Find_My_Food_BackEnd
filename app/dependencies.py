@@ -24,6 +24,7 @@ async def get_current_user(token:Annotated[str, Depends(oauth2_scheme)], db:Sess
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if user_id is None:
+            print("123")
             raise credentials_exception
         
         token_data = TokenData(user_id=int(user_id))

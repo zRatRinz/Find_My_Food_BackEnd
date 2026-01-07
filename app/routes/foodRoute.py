@@ -12,11 +12,11 @@ router = APIRouter(prefix="/foods", tags=["foods"])
 
 @router.get("/")
 def root():
-    # return {"message":"555"}
-    return {
-        "message":datetime.now(ZoneInfo("Asia/Bangkok")),
-        "now":datetime.now()
-        }
+    return {"message":"555"}
+    # return {
+    #     "message":datetime.now(ZoneInfo("Asia/Bangkok")),
+    #     "now":datetime.now()
+    #     }
 
 
 @router.get("/getAllFood", response_model=StandardResponse[list[FoodDTO]])

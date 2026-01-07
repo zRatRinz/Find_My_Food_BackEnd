@@ -3,14 +3,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# DBSERVER = os.getenv("DBSERVER")
-# DBUSER = os.getenv("DBUSER")
-# DBPWD = os.getenv("DBPWD")
-# DBHOST = os.getenv("DBHOST")
-# DBPORT = os.getenv("DBPORT")
-# DBNAME = os.getenv("DBNAME")
-# DBURL = f"{DBSERVER}://{DBUSER}:{DBPWD}@{DBHOST}:{DBPORT}/{DBNAME}"
-DBURL = os.getenv("DBURL")
+DBSERVER = os.getenv("DBSERVER")
+DBUSER = os.getenv("DBUSER")
+DBPWD = os.getenv("DBPWD")
+DBHOST = os.getenv("DBHOST")
+DBPORT = os.getenv("DBPORT")
+DBNAME = os.getenv("DBNAME")
+DBURL = f"{DBSERVER}://{DBUSER}:{DBPWD}@{DBHOST}:{DBPORT}/{DBNAME}"
+# DBURL = os.getenv("DBURL")
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")

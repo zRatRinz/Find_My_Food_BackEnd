@@ -11,23 +11,26 @@ class TokenData(BaseModel):
     user_id: int | None = None
 
 class UserRegisterDTO(BaseModel):
-    username: str
+    email: str
     password: str
-    first_name: str
-    last_name: str
-    age: int
-    gender: str
-    email: str
-
-class UserProfileDTO(BaseModel):
     username: str
-    first_name: str
-    last_name: str
-    age: int
-    gender: str
-    email: str
-    image_url: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    gender: str | None = None
+    age: int | None = None
 
-class UserLoginResponseDTO(BaseModel):
-    user_info: UserProfileDTO
+class UserAccountDTO(BaseModel):
+    email: str
+    username: str
+    first_name: str | None = None
+    last_name: str | None = None
+    gender: str | None = None
+    age: int | None = None
+    image_url: str | None = None
+    
+class GoogleRegisterModel(BaseModel):
+    temp_token: str
+    username: str
+    gender: str
+    age: int
     

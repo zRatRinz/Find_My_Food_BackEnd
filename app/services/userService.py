@@ -3,7 +3,7 @@ from sqlmodel import Session, select, or_
 from datetime import datetime
 from app.models.userModel import UserAccountModel
 from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO
-from app.core import security, cloudinary
+from app.core import datetimezone, security, cloudinary
 
 
 def create_user_account(request: UserRegisterDTO, db:Session):
@@ -89,7 +89,7 @@ def authenticate_user(username:str, password:str, db:Session):
 
 def update_login_time(user: UserAccountModel, db: Session):
     try:
-        user.last_login = datetime.now()
+        user.last_login = datetimezone.get_thai_now()
         db.add(user)
         db.commit()
         return True

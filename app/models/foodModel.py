@@ -1,10 +1,7 @@
 from sqlmodel import SQLModel, Field, Column, DateTime, func, Relationship
 from typing import Optional
-from datetime import datetime, timezone, timedelta
-
-def get_thai_now():
-    thai_time = datetime.now(timezone(timedelta(hours=7)))
-    return thai_time.replace(tzinfo=None)
+from datetime import datetime
+from app.core import datetimezone
 
 class FoodWithIngredientModel(SQLModel, table=True):
     __tablename__ = "map_foodingredient"
@@ -17,7 +14,7 @@ class FoodModel(SQLModel, table=True):
     food_id: Optional[int] = Field(default=None,primary_key=True)
     food:str
     image_url: Optional[str] = None
-    create_date: datetime = Field(default_factory=get_thai_now)
+    create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
     update_date: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     owner_id: Optional[int] = None
     is_public: bool

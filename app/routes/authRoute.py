@@ -117,11 +117,11 @@ def google_register(request: GoogleRegisterModel, db: Session = Depends(database
             provider = "google"
         )
 
-        user_result, message = userService.create_user_account_with_google(new_user, db)
-        if not user_result:
+        user, message = userService.create_user_account_with_google(new_user, db)
+        if not user:
             return StandardResponse.fail(message=message)
 
-        login_time = userService.update_login_time(user_result, db)
+        login_time = userService.update_login_time(user, db)
         if not login_time:
             return StandardResponse.fail(message="เกิดข้อผิดพลาดในเข้าสู่ระบบ")
         # user = userService.get_user_info_by_id(user_result, db)

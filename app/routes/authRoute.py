@@ -10,7 +10,7 @@ from app.core.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIR
 from app.core import security
 from app.db import database
 from app.services import userService
-from app.models.userModel import UserAccountModel
+from app.models.userModel import MasUserModel
 from app.schemas.userDTO import UserAccountDTO, GoogleRegisterModel
 from app.schemas.response import TokenResponse, StandardResponse
 
@@ -109,7 +109,7 @@ def google_register(request: GoogleRegisterModel, db: Session = Depends(database
         except Exception as ex:
             return StandardResponse.fail(message=str(ex))
         
-        new_user = UserAccountModel(
+        new_user = MasUserModel(
             email = payload.get("email"),
             username = request.username,
             gender = request.gender,

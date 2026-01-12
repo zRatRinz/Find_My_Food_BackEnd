@@ -1,25 +1,25 @@
 from fastapi import UploadFile
 from sqlmodel import Session, select, or_
 from datetime import datetime
-from app.models.userModel import UserAccountModel
+from app.models.userModel import MasUserModel
 from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO
 from app.core import datetimezone, security, cloudinary
 
 
 def create_user_account(request: UserRegisterDTO, db:Session):
     try:
-        existing_user_email_sql = select(UserAccountModel).where(UserAccountModel.email == request.email)
+        existing_user_email_sql = select(MasUserModel).where(MasUserModel.email == request.email)
         existing_user_email_result = db.exec(existing_user_email_sql).first()
         if existing_user_email_result:
             return None, "Email นี้มีคนใช้งานแล้ว"
         
-        existing_user_username_sql = select(UserAccountModel).where(UserAccountModel.username == request.username)
+        existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request.username)
         existing_user_username_result = db.exec(existing_user_username_sql).first()
         if existing_user_username_result:
             return None, "Username นี้มีคนใช้งานแล้ว"
 
         hashed_password =  security.create_hash_password(request.password)
-        new_user_profile = UserAccountModel(
+        new_user_profile = MasUserModel(
             email = request.email,
             password = hashed_password,
             username = request.username,
@@ -38,19 +38,19 @@ def create_user_account(request: UserRegisterDTO, db:Session):
         db.rollback()
         return None, "เกิดข้อผิดพลาด"
     
-def create_user_account_with_google(request: UserAccountModel, db:Session):
+def create_user_account_with_google(request: MasUserModel, db:Session):
     try:
-        existing_user_email_sql = select(UserAccountModel).where(UserAccountModel.email == request.email)
+        existing_user_email_sql = select(MasUserModel).where(MasUserModel.email == request.email)
         existing_user_email_result = db.exec(existing_user_email_sql).first()
         if existing_user_email_result:
             return None, "Email นี้มีคนใช้งานแล้ว"
         
-        existing_user_username_sql = select(UserAccountModel).where(UserAccountModel.username == request.username)
+        existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request.username)
         existing_user_username_result = db.exec(existing_user_username_sql).first()
         if existing_user_username_result:
             return None, "Username นี้มีคนใช้งานแล้ว"
 
-        new_user_profile = UserAccountModel(
+        new_user_profile = MasUserModel(
             email = request.email,
             username = request.username,
             first_name = request.first_name,
@@ -87,7 +87,7 @@ def authenticate_user(username:str, password:str, db:Session):
         return False    
     return user_result
 
-def update_login_time(user: UserAccountModel, db: Session):
+def update_login_time(user: MasUserModel, db: Session):
     try:
         user.last_login = datetimezone.get_thai_now()
         db.add(user)
@@ -99,21 +99,21 @@ def update_login_time(user: UserAccountModel, db: Session):
         return False
 
 def get_user_by_username(username:str, db: Session):
-    sql = select(UserAccountModel).where(or_(UserAccountModel.email == username, UserAccountModel.username == username))
+    sql = select(MasUserModel).where(or_(MasUserModel.email == username, MasUserModel.username == username))
     user_result = db.exec(sql).first()
     return user_result
 
 def get_user_by_user_id(user_id: int, db: Session):
-    sql = select(UserAccountModel).where(UserAccountModel.user_id == user_id)
+    sql = select(MasUserModel).where(MasUserModel.user_id == user_id)
     user_result = db.exec(sql).first()
     return user_result
 
 def get_user_info_by_id(user_id: int, db: Session):
-    sql = select(UserAccountModel).where(UserAccountModel.user_id == user_id)
+    sql = select(MasUserModel).where(MasUserModel.user_id == user_id)
     result = db.exec(sql).first()
     return result
 
-def update_user_image(current_user: UserAccountModel, file: UploadFile, db: Session):
+def update_user_image(current_user: MasUserModel, file: UploadFile, db: Session):
     image_url = cloudinary.upload_user_image_to_cloudinary(current_user.user_id, file)
     if not image_url:
         return ("fail", "Upload รูปภาพไม่สำเร็จ")

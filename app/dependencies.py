@@ -10,7 +10,7 @@ from app.db import database
 from app.schemas.userDTO import TokenData
 from app.services import userService
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 async def get_current_user(token:Annotated[str, Depends(oauth2_scheme)], db:Session = Depends(database.get_db)):
     credentials_exception = HTTPException(

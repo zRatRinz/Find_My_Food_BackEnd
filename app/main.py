@@ -3,16 +3,19 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.routes import foodRoute, userRoute, authRoute
+from app.routes import recipeRoute, userRoute, authRoute, shoppingCartRoute, unitRoute
 
 app = FastAPI()
 
 SECRET_KEY = "TestSecretKey"
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
-app.include_router(foodRoute.router)
+app.include_router(recipeRoute.router)
+# app.include_router(foodRoute.router)
 app.include_router(userRoute.router)
 app.include_router(authRoute.router)
+app.include_router(shoppingCartRoute.router)
+app.include_router(unitRoute.router)
 
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, ex: HTTPException):

@@ -38,7 +38,6 @@ class UpdateRecipeHeaderDTO(BaseModel):
     recipe_name: str
     description: str | None = None
     cooking_time_min: int | None = None
-    image_url: str | None = None
     is_public: bool
     is_active: bool
 

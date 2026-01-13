@@ -1,8 +1,10 @@
 from sqlmodel import Session, select, and_, delete
 from sqlalchemy.orm import selectinload
 from app.core import cloudinary, datetimezone
-from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel
-from app.schemas.recipeDTO import CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO
+from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
+from app.schemas.recipeDTO import (
+    CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO
+)
 
 def create_new_recipe(db: Session, request: CreateNewRecipeDTO, user_id: int):
     try:
@@ -109,6 +111,22 @@ def update_recipe_step_by_recipe_id(db: Session, user_id: int, recipe_id: int, r
         db.rollback()
         return None, "เกิดข้อผิดพลาดในการแก้ไขขั้นตอนการทำ"
     
+def like_recipe(db: Session, user_id: int, recipe_id: int):
+    try:
+        recipe = db.get(TrnRecipeModel, recipe_id)
+        if not recipe:
+            print(f"Error: Recipe ID {recipe_id} not found.")
+            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
+        
+        like = MapRecipeLikeModel(user_id=user_id, recipe_id=recipe_id)
+        db.add(like)
+        db.commit()
+        return True, None
+    except Exception as ex:
+        print(f"error: {ex}")
+        db.rollback()
+        return None, "เกิดข้อผิดพลาดในการแก้ไข"
+    
 def get_all_recipe(db: Session):
     sql = select(TrnRecipeModel).where(TrnRecipeModel.is_active == True).options(
         selectinload(TrnRecipeModel.user)
@@ -139,5 +157,10 @@ def get_my_create_recipe(db: Session, user_id: int):
     sql = select(TrnRecipeModel).where(TrnRecipeModel.user_id == user_id).options(
         selectinload(TrnRecipeModel.user)
     )
+    result = db.exec(sql).all()
+    return result
+
+def get_ingredient_by_name(db: Session, ingredient_name: str):
+    sql = select(MasIngredientModel).where(MasIngredientModel.ingredient_name.ilike(f"%{ingredient_name}%"))
     result = db.exec(sql).all()
     return result

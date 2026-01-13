@@ -2,7 +2,6 @@ from sqlmodel import SQLModel, Field, Relationship
 from typing import TYPE_CHECKING
 from datetime import datetime
 from app.core import datetimezone
-# from app.models.userModel import MasUserModel
 from app.models.unitModel import UnitModel
 
 if TYPE_CHECKING:
@@ -71,3 +70,9 @@ class DtlRecipeStepModel(SQLModel, table=True):
     instruction: str
 
     recipe: "TrnRecipeModel" = Relationship(back_populates="steps")
+
+class MapRecipeLikeModel(SQLModel, table=True):
+    __tablename__ = "map_recipe_like"
+    recipe_id: int = Field(foreign_key="trn_recipe.recipe_id", primary_key=True)
+    user_id: int = Field(foreign_key="mas_user.user_id", primary_key=True)
+    create_date: datetime = Field(default_factory=datetimezone.get_thai_now)

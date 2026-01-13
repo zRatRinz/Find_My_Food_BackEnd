@@ -5,7 +5,10 @@ from app.core import cloudinary
 from app.db import database
 from app.dependencies import get_current_user
 from app.models.userModel import MasUserModel
-from app.schemas.recipeDTO import CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO, RecipeDetailResponseDTO, RecipeIngredientResponseDTO
+from app.schemas.recipeDTO import (
+    CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO,
+    RecipeDetailResponseDTO, RecipeIngredientResponseDTO, IngredientResponseDTO
+)
 from app.schemas.response import StandardResponse
 from app.services import recipeService
 
@@ -89,6 +92,14 @@ def get_recipe_detail_by_recipe_id(request:int, db:Session = Depends(database.ge
 def get_my_create_recipe(current_user: Annotated[MasUserModel, Depends(get_current_user)], db:Session = Depends(database.get_db)):
     try:
         response = recipeService.get_my_create_recipe(db, current_user.user_id)
+        return StandardResponse.success(data=response)
+    except Exception as ex:
+        return StandardResponse.fail(message=str(ex))
+    
+@router.get("/getIngredientByName/{ingredient_name}", response_model=StandardResponse[list[IngredientResponseDTO]])
+def get_ingredient_by_name(ingredient_name:str, db:Session = Depends(database.get_db)):
+    try:
+        response = recipeService.get_ingredient_by_name(db, ingredient_name)
         return StandardResponse.success(data=response)
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))

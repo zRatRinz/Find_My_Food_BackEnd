@@ -71,3 +71,7 @@ class RecipeStepResponseDTO(BaseModel):
 class RecipeDetailResponseDTO(RecipeResponseDTO):
     ingredients: list[RecipeIngredientResponseDTO]
     steps: list[RecipeStepResponseDTO]
+
+class IngredientResponseDTO(BaseModel):
+    ingredient_id: int
+    ingredient_name: str

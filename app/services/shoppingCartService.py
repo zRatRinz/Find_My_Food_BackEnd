@@ -125,6 +125,25 @@ def update_shopping_item_unit_by_item_id(db: Session, user_id: int, item_id: int
         print(f"error: {ex}")
         return None, "เกิดข้อผิดพลาดในการแก้ไขหน่วย"
     
+def delete_shopping_item_by_item_id(db: Session, user_id: int, item_id: int):
+    try:
+        item = db.get(ShoppingItemModel, item_id)
+        if not item:
+            print(f"Error: Shopping item ID {item_id} not found.")
+            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
+        
+        if item.shopping_list.user_id != user_id:
+            print(f"Error: Not authorized to delete shopping item.")
+            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
+        
+        db.delete(item)
+        db.commit()
+        return True, None
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        return None, "เกิดข้อผิดพลาดในการลบรายการสั่งซื้อ"
+    
 def get_shopping_list_by_user_id(db:Session, user_id: int):
     sql = select(ShoppingListModel).where(ShoppingListModel.user_id == user_id).options(
             selectinload(ShoppingListModel.items).options(

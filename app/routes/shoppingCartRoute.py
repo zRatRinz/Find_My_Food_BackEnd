@@ -62,6 +62,16 @@ def update_shopping_item_unit_by_item_id(current_user: Annotated[MasUserModel, D
         return StandardResponse.success(data=response)
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
+    
+@router.delete("/deleteItemFromShoppingList/{item_id}")
+def delete_item_from_shopping_list(current_user: Annotated[MasUserModel, Depends(get_current_user)], item_id: int, db:Session = Depends(database.get_db)):
+    try:
+        response, message = shoppingCartService.delete_shopping_item_by_item_id(db, current_user.user_id, item_id)
+        if not response:
+            return StandardResponse.fail(message=message)
+        return StandardResponse.success()
+    except Exception as ex:
+        return StandardResponse.fail(message=str(ex))
 
 @router.get("/getShoppingList")
 def get_shopping_list(current_user: Annotated[MasUserModel, Depends(get_current_user)], db:Session = Depends(database.get_db)):

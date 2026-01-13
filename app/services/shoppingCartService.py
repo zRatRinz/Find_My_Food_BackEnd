@@ -18,27 +18,27 @@ def create_new_shopping_list(db:Session, request: CreateNewShoppingListDTO, user
         db.add(new_shopping_list)
         db.flush()
 
-        if not request.items:
-            return (None, "กรุณาเพิ่มรายการสินค้า")
-        
-        items = [
-            ShoppingItemModel(
-                shopping_list_id = new_shopping_list.shopping_list_id,
-                item_name = item.item_name,
-                quantity = item.quantity,
-                unit_id = item.unit_id,
-                note = item.note
-            )
-            for item in request.items
-        ]
-        db.add_all(items)
-        # create_new_shopping_item(db, request.items, new_shopping_list.shopping_list_id)
+        if request.items: 
+            items = [
+                ShoppingItemModel(
+                    shopping_list_id = new_shopping_list.shopping_list_id,
+                    item_name = item.item_name,
+                    quantity = item.quantity,
+                    unit_id = item.unit_id,
+                    note = item.note
+                )
+                for item in request.items
+            ]
+            db.add_all(items)
+
         db.commit()
-        return "success"
+        db.refresh(new_shopping_list)
+        
+        return new_shopping_list, None
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None
+        return None, str(ex)
 
 def add_item_to_shopping_list(db:Session, user_id: int, request_body: AddShoppingItemToShoppingListDTO):
     try:
@@ -124,6 +124,25 @@ def update_shopping_item_unit_by_item_id(db: Session, user_id: int, item_id: int
         db.rollback()
         print(f"error: {ex}")
         return None, "เกิดข้อผิดพลาดในการแก้ไขหน่วย"
+    
+def delete_shopping_list_by_shopping_list_id(db: Session, user_id: int, shopping_list_id: int):
+    try:
+        list = db.get(ShoppingListModel, shopping_list_id)
+        if not list:
+            print(f"Error: Shopping list ID {shopping_list_id} not found.")
+            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
+        
+        if list.user_id != user_id:
+            print(f"Error: Not authorized to delete shopping list.")
+            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
+        
+        db.delete(list)
+        db.commit()
+        return True, None
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        return None, "เกิดข้อผิดพลาดในการลบรายการสั่งซื้อ"
     
 def delete_shopping_item_by_item_id(db: Session, user_id: int, item_id: int):
     try:

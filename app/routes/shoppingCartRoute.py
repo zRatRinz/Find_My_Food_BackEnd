@@ -13,13 +13,13 @@ from app.schemas.response import StandardResponse
 
 router = APIRouter(prefix="/shoppingCart", tags=["shoppingCart"])
 
-@router.post("/createNewShoppingList")
+@router.post("/createNewShoppingList", response_model=StandardResponse[ShoppingListResponseDTO])
 def create_new_shopping_list(request: CreateNewShoppingListDTO, current_user: Annotated[MasUserModel, Depends(get_current_user)], db:Session = Depends(database.get_db)):
     try:
-        response = shoppingCartService.create_new_shopping_list(db, request, current_user.user_id)
+        response, message = shoppingCartService.create_new_shopping_list(db, request, current_user.user_id)
         if not response:
             return StandardResponse.fail(message="บันทึกไม่สำเร็จ")
-        return StandardResponse.success()
+        return StandardResponse.success(data=response)
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
     
@@ -63,6 +63,16 @@ def update_shopping_item_unit_by_item_id(current_user: Annotated[MasUserModel, D
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
     
+@router.delete("/deleteShoppingList/{list_id}")
+def delete_shopping_list(current_user: Annotated[MasUserModel, Depends(get_current_user)], list_id: int, db:Session = Depends(database.get_db)):
+    try:
+        response, message = shoppingCartService.delete_shopping_list_by_shopping_list_id(db, current_user.user_id, list_id)
+        if not response:
+            return StandardResponse.fail(message=message)
+        return StandardResponse.success()
+    except Exception as ex:
+        return StandardResponse.fail(message=str(ex))
+
 @router.delete("/deleteItemFromShoppingList/{item_id}")
 def delete_item_from_shopping_list(current_user: Annotated[MasUserModel, Depends(get_current_user)], item_id: int, db:Session = Depends(database.get_db)):
     try:

@@ -12,7 +12,12 @@ class ShoppingListModel(SQLModel, table=True):
     create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
     update_date: datetime | None = None
 
-    items: list["ShoppingItemModel"] = Relationship(back_populates="shopping_list")
+    items: list["ShoppingItemModel"] = Relationship(
+        back_populates="shopping_list",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan"
+        }
+    )
 
 class ShoppingItemModel(SQLModel, table=True):
     __tablename__ = "dtl_shopping_item"

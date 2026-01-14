@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Render
-        run: curl -s 
+        run: curl -s https://find-my-food-api.onrender.com/health

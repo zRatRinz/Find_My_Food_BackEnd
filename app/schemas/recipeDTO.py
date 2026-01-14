@@ -47,7 +47,7 @@ class RecipeResponseDTO(BaseModel):
     description: str | None = None
     cooking_time_min: int | None = None
     image_url: str | None = None
-    username: str 
+    username: str | None = None
     create_date: datetime | None = None
     update_date: datetime | None = None
     is_public: bool

@@ -10,6 +10,11 @@ app = FastAPI()
 SECRET_KEY = "TestSecretKey"
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
+
+@app.get("/health", tags=["health"])
+async def health_check():
+    return {"message": "Hello Thailand"}
+
 app.include_router(recipeRoute.router)
 # app.include_router(foodRoute.router)
 app.include_router(userRoute.router)

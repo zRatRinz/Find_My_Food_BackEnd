@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlmodel import Session
 from uuid import UUID
-from typing import Annotated
-from app.dependencies import get_current_user, get_current_user_optional
+from app.dependencies import get_current_user_optional
 from app.db import database
 from app.services import shoppingCartService
 from app.models.userModel import MasUserModel

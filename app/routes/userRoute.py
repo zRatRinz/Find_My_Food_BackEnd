@@ -2,11 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from typing import Annotated
-from datetime import timedelta
-
 from app.core.config import ACCESS_TOKEN_EXPIRE_MIN
 from app.core import security
-from app.dependencies import oauth2_scheme, get_current_user
+from app.dependencies import oauth2_scheme, get_current_active_user
 from app.db import database
 from app.models.userModel import MasUserModel
 from app.schemas.userDTO import UserRegisterDTO, UserAccountDTO
@@ -40,7 +38,7 @@ async def create_user(request:UserRegisterDTO, db:Session = Depends(database.get
 #         return StandardResponse(message=str(ex))
 
 @router.post("/uploadUserImage")
-async def upload_user_image(current_user: Annotated[MasUserModel, Depends(get_current_user)], file: UploadFile = File(...), db: Session = Depends(database.get_db)):
+async def upload_user_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], file: UploadFile = File(...), db: Session = Depends(database.get_db)):
     try:
         response, message = userService.update_user_image(current_user, file, db)
         if message:

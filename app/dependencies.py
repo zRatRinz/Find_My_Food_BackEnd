@@ -7,6 +7,7 @@ from jwt.exceptions import InvalidTokenError
 
 from app.core.config import SECRET_KEY, ALGORITHM
 from app.db import database
+from app.models.userModel import MasUserModel
 from app.schemas.userDTO import TokenData
 from app.services import userService
 
@@ -56,3 +57,8 @@ async def get_current_user_optional(token: Annotated[str | None, Depends(oauth2_
         return user
     except :
         return None
+
+async def get_current_active_user(current_user: Annotated[MasUserModel, Depends(get_current_user)]):
+    if current_user.is_active is False:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user

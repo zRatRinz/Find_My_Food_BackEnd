@@ -23,10 +23,8 @@ def create_user_account(request: UserRegisterDTO, db:Session):
             email = request.email,
             password = hashed_password,
             username = request.username,
-            first_name = request.first_name,
-            last_name = request.last_name,
             gender = request.gender,
-            age = request.age
+            birth_date = request.age
         )
 
         db.add(new_user_profile)
@@ -53,10 +51,8 @@ def create_user_account_with_google(request: MasUserModel, db:Session):
         new_user_profile = MasUserModel(
             email = request.email,
             username = request.username,
-            first_name = request.first_name,
-            last_name = request.last_name,
             gender = request.gender,
-            age = request.age,
+            birth_date = request.birth_date,
             provider = request.provider
         )
 

@@ -11,6 +11,7 @@ from app.schemas.userDTO import TokenData
 from app.services import userService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 async def get_current_user(token:Annotated[str, Depends(oauth2_scheme)], db:Session = Depends(database.get_db)):
     credentials_exception = HTTPException(
@@ -39,3 +40,19 @@ async def get_current_user(token:Annotated[str, Depends(oauth2_scheme)], db:Sess
         return user
     except Exception as ex:
         print(str(ex))
+
+async def get_current_user_optional(token: Annotated[str | None, Depends(oauth2_scheme_optional)], db: Session = Depends(database.get_db)):
+    if not token:
+        return None
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        
+        token_data = TokenData(user_id=int(user_id))
+        user = userService.get_user_by_user_id(token_data.user_id, db)
+        return user
+    except :
+        return None

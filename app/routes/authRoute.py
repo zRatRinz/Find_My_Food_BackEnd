@@ -51,9 +51,7 @@ async def login(request: Annotated[OAuth2PasswordRequestForm, Depends()], db:Ses
         
         user_info_data = UserAccountDTO(
             username = user.username,
-            first_name = user.first_name,
-            last_name = user.last_name,
-            age = user.age,
+            age = user.birth_date,
             gender = user.gender,
             email = user.email
         )
@@ -113,7 +111,7 @@ def google_register(request: GoogleRegisterModel, db: Session = Depends(database
             email = payload.get("email"),
             username = request.username,
             gender = request.gender,
-            age = request.age,
+            birth_date = request.age,
             provider = "google"
         )
 

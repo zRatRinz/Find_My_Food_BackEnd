@@ -16,7 +16,6 @@ async def health_check():
     return {"message": "Hello Thailand"}
 
 app.include_router(recipeRoute.router)
-# app.include_router(foodRoute.router)
 app.include_router(userRoute.router)
 app.include_router(authRoute.router)
 app.include_router(shoppingCartRoute.router)

@@ -34,6 +34,21 @@ def create_new_recipe(current_user: Annotated[MasUserModel, Depends(get_current_
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
     
+@router.post("/likeRecipe/{recipe_id}")
+def like_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, db:Session = Depends(database.get_db)):
+    response, message = recipeService.like_recipe(db, current_user.user_id, recipe_id)
+    if not response:
+        return StandardResponse.fail(message=message)
+    return StandardResponse.success()
+
+@router.delete("/unlikeRecipe/{recipe_id}")
+def unlike_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, db:Session = Depends(database.get_db)):
+    response, message = recipeService.unlike_recipe(db, current_user.user_id, recipe_id)
+    if not response:
+        return StandardResponse.fail(message=message)
+    return StandardResponse.success()
+
+    
 @router.put("/updateRecipeHeaderById/{recipe_id}")
 def update_recipe_header_by_recipe_id(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, request_body: UpdateRecipeHeaderDTO, db:Session = Depends(database.get_db)):
     try:

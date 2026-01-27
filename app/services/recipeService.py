@@ -117,15 +117,38 @@ def like_recipe(db: Session, user_id: int, recipe_id: int):
         if not recipe:
             print(f"Error: Recipe ID {recipe_id} not found.")
             return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
+        like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
+        like_exist = db.exec(like_exist_sql).first()
+        if like_exist:
+            return None, "คุณ like รายการนี้ไปแล้ว"
         
         like = MapRecipeLikeModel(user_id=user_id, recipe_id=recipe_id)
         db.add(like)
         db.commit()
-        return True, None
+        return "success", None
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการแก้ไข"
+        return None, "เกิดข้อผิดพลาดในการ like รายการอาหาร"
+    
+def unlike_recipe(db: Session, user_id: int, recipe_id: int):
+    try:
+        recipe = db.get(TrnRecipeModel, recipe_id)
+        if not recipe:
+            print(f"Error: Recipe ID {recipe_id} not found.")
+            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
+        like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
+        like_exist = db.exec(like_exist_sql).first()
+        if not like_exist:
+            return None, "คุณยังไม่ได้ like รายการนี้"
+        
+        db.delete(like_exist)
+        db.commit()
+        return "success", None
+    except Exception as ex:
+        print(f"error: {ex}")
+        db.rollback()
+        return None, "เกิดข้อผิดพลาดในการลบ like รายการอาหาร"
     
 def get_all_recipe(db: Session):
     sql = select(TrnRecipeModel).where(TrnRecipeModel.is_active == True).options(

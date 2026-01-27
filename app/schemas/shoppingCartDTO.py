@@ -8,6 +8,7 @@ class AddShoppingItemInNewShoppingListDTO(BaseModel):
     note: str | None = None
 
 class CreateNewShoppingListDTO(BaseModel):
+    shopping_type: str
     list_name: str
     items: list[AddShoppingItemInNewShoppingListDTO]
 

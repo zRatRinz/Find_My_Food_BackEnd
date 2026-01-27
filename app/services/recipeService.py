@@ -1,4 +1,4 @@
-from sqlmodel import Session, select, and_, delete
+from sqlmodel import Session, select, delete
 from sqlalchemy.orm import selectinload
 from app.core import cloudinary, datetimezone
 from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
@@ -135,7 +135,7 @@ def get_all_recipe(db: Session):
     return result
 
 def get_recipe_by_name(db: Session, recipe_name: str):
-    sql = select(TrnRecipeModel).where(and_(TrnRecipeModel.recipe_name.contains(recipe_name), TrnRecipeModel.is_active == True)).options(
+    sql = select(TrnRecipeModel).where(TrnRecipeModel.recipe_name.contains(recipe_name), TrnRecipeModel.is_active.is_(True)).options(
         selectinload(TrnRecipeModel.user)
     )
     result = db.exec(sql).all()

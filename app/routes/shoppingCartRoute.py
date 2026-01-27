@@ -5,6 +5,7 @@ from app.dependencies import get_current_user_optional
 from app.db import database
 from app.services import shoppingCartService
 from app.models.userModel import MasUserModel
+from app.enums.shoppingCartEnum import ShoppingTypeEnum
 from app.schemas.shoppingCartDTO import (
     CreateNewShoppingListDTO, AddShoppingItemToShoppingListDTO, UpdateShoppingItemStatusDTO, UpdateShoppingItemQuantityDTO, UpdateShoppingItemUnitDTO,
     UpdateShoppingItemResponseDTO, ShoppingListResponseDTO
@@ -149,8 +150,9 @@ def delete_item_from_shopping_list(item_id: int,
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
 
-@router.get("/getShoppingList")
-def get_shopping_list(guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
+@router.get("/getShoppingList/{shopping_type}")
+def get_shopping_list(shopping_type: ShoppingTypeEnum,
+                      guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                       current_user: MasUserModel | None = Depends(get_current_user_optional),
                       db:Session = Depends(database.get_db)):
     try:
@@ -160,7 +162,7 @@ def get_shopping_list(guest_token: UUID | None = Header(default=None, alias="X-G
                 status_code=401,
                 detail="ต้อง login หรือเป็น guest ก่อน"
             )
-        response = shoppingCartService.get_shopping_list_by_user_id(db, user_id, guest_token)
+        response = shoppingCartService.get_shopping_list_by_user_id_or_guest_token(db, shopping_type, user_id, guest_token)
         response_dto = [
             ShoppingListResponseDTO.model_validate(item) for item in response
         ]

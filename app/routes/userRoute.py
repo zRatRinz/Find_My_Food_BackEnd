@@ -7,7 +7,7 @@ from app.core import security
 from app.dependencies import oauth2_scheme, get_current_active_user
 from app.db import database
 from app.models.userModel import MasUserModel
-from app.schemas.userDTO import UserRegisterDTO, UserAccountDTO
+from app.schemas.userDTO import UserRegisterDTO, UserAccountDTO, VerifyPasswordDTO, ChangePasswordDTO,UpdateUsernameDTO
 from app.services import userService
 from app.schemas.response import TokenResponse, StandardResponse
 
@@ -46,3 +46,24 @@ async def upload_user_image(current_user: Annotated[MasUserModel, Depends(get_cu
         return StandardResponse.success()
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
+    
+# @router.post("/verifyCurrentPassword")
+# def verify_current_password(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request_body: VerifyPasswordDTO, db: Session = Depends(database.get_db)):
+#     if not security.verify_password(current_user.password, request_body.password):
+#         return StandardResponse.fail(message="รหัสผ่านไม่ถูกต้อง")
+#     return StandardResponse.success()
+
+@router.post("/changePassword")
+def change_user_password(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request_body: ChangePasswordDTO, db: Session = Depends(database.get_db)):
+    response, message = userService.change_user_password(current_user, request_body, db)
+    if not response:
+        return StandardResponse.fail(message=message)
+    return StandardResponse.success()
+    
+@router.patch("/updateUsername")
+def update_user_username(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request_body: UpdateUsernameDTO, db: Session = Depends(database.get_db)):
+
+    response, message = userService.update_user_username(current_user, request_body, db)
+    if not response:
+        return StandardResponse.fail(message=message)
+    return StandardResponse.success()

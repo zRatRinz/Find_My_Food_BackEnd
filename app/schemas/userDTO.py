@@ -28,9 +28,22 @@ class UserAccountDTO(BaseModel):
     age: int | None = None
     image_url: str | None = None
     
-class GoogleRegisterModel(BaseModel):
+class GoogleRegisterDTO(BaseModel):
     temp_token: str
     username: str
     gender: str
     age: int
+
+class GoogleLoginDTO(BaseModel):
+    id_token: str
+
+class VerifyPasswordDTO(BaseModel):
+    password: str
+
+class ChangePasswordDTO(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
     
+class UpdateUsernameDTO(BaseModel):
+    username: str

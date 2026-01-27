@@ -1,9 +1,9 @@
 from fastapi import UploadFile
 from sqlmodel import Session, select, or_
 from datetime import datetime
-from app.models.userModel import MasUserModel
-from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO
 from app.core import datetimezone, security, cloudinary
+from app.models.userModel import MasUserModel
+from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO, ChangePasswordDTO, UpdateUsernameDTO
 
 
 def create_user_account(request: UserRegisterDTO, db:Session):
@@ -123,3 +123,41 @@ def update_user_image(current_user: MasUserModel, file: UploadFile, db: Session)
         print(f"error: {ex}")
         db.rollback()
         return ("fail","เกิดข้อผิดพลาด")
+    
+def update_user_username(current_user: MasUserModel, request_body: UpdateUsernameDTO, db: Session):
+    try:
+        if current_user.username == request_body.username:
+            return (None, "Username ใหม่ต้องไม่ซ้ํากับ Username ปัจจุบัน")
+        
+        existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request_body.username)
+        existing_user_username_result = db.exec(existing_user_username_sql).first()
+        if existing_user_username_result:
+            return (None, "Username นี้มีคนใช้งานแล้ว")
+
+        current_user.username = request_body.username
+        current_user.update_date = datetimezone.get_thai_now()
+        db.commit()
+        return ("success", None)
+    except Exception as ex:
+        print(f"error: {ex}")
+        db.rollback()
+        return (None,"เกิดข้อผิดพลาด")
+
+def change_user_password(current_user: MasUserModel, request_body: ChangePasswordDTO, db: Session):
+    try:
+        if not security.verify_password(request_body.current_password, current_user.password):
+            return (None, "รหัสผ่านปัจจุบันไม่ถูกต้อง")
+
+        if request_body.new_password != request_body.confirm_password:
+            return (None, "รหัสผ่านไม่ตรงกัน")
+
+        if security.verify_password(request_body.new_password, current_user.password):
+            return (None, "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านปัจจุบัน")
+        current_user.password = security.create_hash_password(request_body.new_password)
+        current_user.update_date = datetimezone.get_thai_now()
+        db.commit()
+        return ("success", None)
+    except Exception as ex:
+        print(f"error: {ex}")
+        db.rollback()
+        return (None,"เกิดข้อผิดพลาด")

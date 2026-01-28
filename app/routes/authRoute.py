@@ -108,6 +108,9 @@ def google_login(request_body: GoogleLoginDTO, db: Session = Depends(database.ge
         if user:
             if user.provider != "google":
                 return StandardResponse.fail(message="บัญชีนี้ไม่ได้สมัครด้วย Google")
+            login_time = userService.update_login_time(user, db)
+            if not login_time:
+                return StandardResponse.fail(message="เกิดข้อผิดพลาดในเข้าสู่ระบบ")
             access_token = security.create_access_token(data={"sub": str(user.user_id)})
             return TokenResponse(
                 access_token=access_token,

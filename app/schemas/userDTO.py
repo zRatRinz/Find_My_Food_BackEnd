@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import date
 
 class UserLoginDTO(BaseModel):
     username: str
@@ -17,7 +18,7 @@ class UserRegisterDTO(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     gender: str | None = None
-    age: int | None = None
+    birth_date: date | None = None
 
 class UserAccountDTO(BaseModel):
     email: str
@@ -25,14 +26,14 @@ class UserAccountDTO(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     gender: str | None = None
-    age: int | None = None
+    birth_date: date | None = None
     image_url: str | None = None
     
 class GoogleRegisterDTO(BaseModel):
     temp_token: str
     username: str
     gender: str
-    age: int
+    birth_date: date
 
 class GoogleLoginDTO(BaseModel):
     id_token: str

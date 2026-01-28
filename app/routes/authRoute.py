@@ -7,7 +7,7 @@ import jwt
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from datetime import timedelta
-from app.core.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MIN
+from app.core.config import GOOGLE_ANDROID_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MIN
 from app.core import security
 from app.db import database
 from app.services import userService
@@ -52,7 +52,7 @@ async def login(request: Annotated[OAuth2PasswordRequestForm, Depends()], db:Ses
         
         user_info_data = UserAccountDTO(
             username = user.username,
-            age = user.birth_date,
+            birth_date = user.birth_date,
             gender = user.gender,
             email = user.email
         )
@@ -101,7 +101,7 @@ async def login(request: Annotated[OAuth2PasswordRequestForm, Depends()], db:Ses
 @router.post("/google/login")
 def google_login(request_body: GoogleLoginDTO, db: Session = Depends(database.get_db)):
     try:
-        id_info = id_token.verify_oauth2_token(request_body.id_token, requests.Request(), GOOGLE_CLIENT_ID)
+        id_info = id_token.verify_oauth2_token(request_body.id_token, requests.Request(), GOOGLE_ANDROID_CLIENT_ID)
         email = id_info["email"]
         google_id = id_info["sub"]
         user = userService.get_user_by_username(email, db)
@@ -144,7 +144,7 @@ def google_register(request: GoogleRegisterDTO, db: Session = Depends(database.g
             email = email,
             username = request.username,
             gender = request.gender,
-            birth_date = request.age,
+            birth_date = request.birth_date,
             provider = "google"
         )
 

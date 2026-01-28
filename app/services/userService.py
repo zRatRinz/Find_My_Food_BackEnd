@@ -24,7 +24,7 @@ def create_user_account(request: UserRegisterDTO, db:Session):
             password = hashed_password,
             username = request.username,
             gender = request.gender,
-            birth_date = request.age
+            birth_date = request.birth_date
         )
 
         db.add(new_user_profile)

@@ -62,8 +62,15 @@ def change_user_password(current_user: Annotated[MasUserModel, Depends(get_curre
     
 @router.patch("/updateUsername")
 def update_user_username(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request_body: UpdateUsernameDTO, db: Session = Depends(database.get_db)):
-
     response, message = userService.update_user_username(current_user, request_body, db)
     if not response:
         return StandardResponse.fail(message=message)
     return StandardResponse.success()
+
+@router.get("getSimpleUserInfo")
+def get_simple_user_info(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], db: Session = Depends(database.get_db)):
+    response = userService.get_simple_user_info(current_user.user_id, db)
+    if not response:
+        return StandardResponse.fail(message="ไม่พบข้อมูล")
+    return StandardResponse.success(data=response)
+    

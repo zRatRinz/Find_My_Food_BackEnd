@@ -48,3 +48,9 @@ class ChangePasswordDTO(BaseModel):
     
 class UpdateUsernameDTO(BaseModel):
     username: str
+
+class SimpleUserInfoDTO(BaseModel):
+    user_id: int
+    email: str
+    username: str
+    image_url: str | None = None

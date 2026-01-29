@@ -3,7 +3,7 @@ from sqlmodel import Session, select, or_
 from datetime import datetime
 from app.core import datetimezone, security, cloudinary
 from app.models.userModel import MasUserModel
-from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO, ChangePasswordDTO, UpdateUsernameDTO
+from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO, ChangePasswordDTO, UpdateUsernameDTO, SimpleUserInfoDTO
 
 
 def create_user_account(request: UserRegisterDTO, db:Session):
@@ -161,3 +161,16 @@ def change_user_password(current_user: MasUserModel, request_body: ChangePasswor
         print(f"error: {ex}")
         db.rollback()
         return (None,"เกิดข้อผิดพลาด")
+    
+def get_simple_user_info(user_id: int, db: Session):
+    sql = select(MasUserModel.username, MasUserModel.email, MasUserModel.image_url).where(MasUserModel.user_id == user_id)
+    result = db.exec(sql).first()
+    if not result:
+        return None
+    
+    return SimpleUserInfoDTO(
+        user_id = user_id,
+        email = result.email,
+        username = result.username,
+        image_url = result.image_url
+    )

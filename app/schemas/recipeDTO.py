@@ -52,6 +52,7 @@ class RecipeResponseDTO(BaseModel):
     update_date: datetime | None = None
     is_public: bool
     is_active: bool
+    like_count: int = Field(default=0)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,10 +69,18 @@ class RecipeStepResponseDTO(BaseModel):
     step_no: int
     instruction: str
 
-class RecipeDetailResponseDTO(RecipeResponseDTO):
+    model_config = ConfigDict(from_attributes=True)
+
+class RecipeDetailResponseDTO(BaseModel):
+    recipe: RecipeResponseDTO
     ingredients: list[RecipeIngredientResponseDTO]
     steps: list[RecipeStepResponseDTO]
+    is_liked: bool
 
 class IngredientResponseDTO(BaseModel):
     ingredient_id: int
     ingredient_name: str
+
+class LikeRecipeResponseDTO(BaseModel):
+    like_count: int = Field(default=0)
+    is_liked: bool

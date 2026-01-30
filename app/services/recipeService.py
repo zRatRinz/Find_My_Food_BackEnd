@@ -1,10 +1,12 @@
-from sqlmodel import Session, select, delete
-from sqlalchemy.orm import selectinload
+from sqlmodel import Session, select, delete, func
+from sqlalchemy.orm import selectinload, joinedload
 from app.core import cloudinary, datetimezone
 from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
 from app.schemas.recipeDTO import (
-    CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO
+    CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, 
+    RecipeResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
 )
+from app.enums.errorCodeEnum import ErrorCodeEnum
 
 def create_new_recipe(db: Session, request: CreateNewRecipeDTO, user_id: int):
     try:
@@ -116,65 +118,130 @@ def like_recipe(db: Session, user_id: int, recipe_id: int):
         recipe = db.get(TrnRecipeModel, recipe_id)
         if not recipe:
             print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
+            return None, ErrorCodeEnum.NOT_FOUND
         like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
         like_exist = db.exec(like_exist_sql).first()
         if like_exist:
-            return None, "คุณ like รายการนี้ไปแล้ว"
+            return None, ErrorCodeEnum.BAD_REQUEST
         
         like = MapRecipeLikeModel(user_id=user_id, recipe_id=recipe_id)
         db.add(like)
         db.commit()
-        return "success", None
+        new_count = db.scalar(
+            select(func.count(MapRecipeLikeModel.user_id))
+            .where(MapRecipeLikeModel.recipe_id == recipe_id)
+        )
+        is_liked = True
+        return LikeRecipeResponseDTO(like_count=new_count, is_liked=is_liked), None
     except Exception as ex:
-        print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการ like รายการอาหาร"
+        print(f"error: {ex}")
+        return None, ErrorCodeEnum.INTERNAL_ERROR
     
 def unlike_recipe(db: Session, user_id: int, recipe_id: int):
     try:
         recipe = db.get(TrnRecipeModel, recipe_id)
         if not recipe:
             print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
+            return None, ErrorCodeEnum.NOT_FOUND
         like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
         like_exist = db.exec(like_exist_sql).first()
         if not like_exist:
-            return None, "คุณยังไม่ได้ like รายการนี้"
+            return None, ErrorCodeEnum.BAD_REQUEST
         
         db.delete(like_exist)
         db.commit()
-        return "success", None
+        new_count = db.scalar(
+            select(func.count(MapRecipeLikeModel.user_id))
+            .where(MapRecipeLikeModel.recipe_id == recipe_id)
+        )
+        is_liked = False
+        return LikeRecipeResponseDTO(like_count=new_count, is_liked=is_liked), None
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        return None, ErrorCodeEnum.INTERNAL_ERROR
+    
+def get_all_recipe(db: Session):
+    sql = select(
+        TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+        ).outerjoin(
+            MapRecipeLikeModel,
+            MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+        ).where(
+            TrnRecipeModel.is_active == True
+        ).group_by(
+            TrnRecipeModel.recipe_id
+        ).options(
+            selectinload(TrnRecipeModel.user)
+        )
+    
+    result = db.exec(sql).all()
+    return [ RecipeResponseDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count}
+    ) for recipe, like_count in result]
+
+def get_recipe_by_name(db: Session, recipe_name: str):
+    try:
+        sql = select(
+            TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+            ).outerjoin(
+                MapRecipeLikeModel,
+                MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+            ).where(
+                TrnRecipeModel.recipe_name.contains(recipe_name), TrnRecipeModel.is_active.is_(True)
+            ).group_by(
+                TrnRecipeModel.recipe_id
+            ).options(
+            selectinload(TrnRecipeModel.user)
+        )
+        result = db.exec(sql).all()
+        return [ RecipeResponseDTO.model_validate(
+            recipe, from_attributes=True
+        ).model_copy(
+            update={"like_count": like_count}
+        ) for recipe, like_count in result]
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        return None
+
+def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | None = None):
+    try:
+        recipe = db.get(TrnRecipeModel, recipe_id)
+        if not recipe:
+            print(f"Error: Recipe ID {recipe_id} not found.")
+            return None, ErrorCodeEnum.NOT_FOUND
+        # ingredients = db.exec(select(DtlRecipeIngredientModel).where(DtlRecipeIngredientModel.recipe_id == recipe_id)).all()
+        ingredients = db.exec(
+            select(DtlRecipeIngredientModel)
+            .where(DtlRecipeIngredientModel.recipe_id == recipe_id)
+            .options(
+                joinedload(DtlRecipeIngredientModel.ingredient),
+                joinedload(DtlRecipeIngredientModel.unit)
+            )
+        ).all()
+        steps = db.exec(select(DtlRecipeStepModel).where(DtlRecipeStepModel.recipe_id == recipe_id).order_by(DtlRecipeStepModel.step_no)).all()
+        like_count = db.scalar(select(func.count(MapRecipeLikeModel.user_id)).where(MapRecipeLikeModel.recipe_id == recipe_id))
+        
+        is_liked = False
+        if user_id:
+            like_exist_sql = select(func.count()).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
+            like_exist = db.scalar(like_exist_sql)
+            is_liked = like_exist > 0
+
+        return RecipeDetailResponseDTO(
+            recipe = RecipeResponseDTO.model_validate(recipe).model_copy(update={"like_count": like_count}),
+            ingredients = [RecipeIngredientResponseDTO.model_validate(ingredient) for ingredient in ingredients],
+            steps = [RecipeStepResponseDTO.model_validate(step) for step in steps],
+            is_liked = is_liked
+        ), None
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการลบ like รายการอาหาร"
-    
-def get_all_recipe(db: Session):
-    sql = select(TrnRecipeModel).where(TrnRecipeModel.is_active == True).options(
-        selectinload(TrnRecipeModel.user)
-    )
-    result = db.exec(sql).all()
-    return result
-
-def get_recipe_by_name(db: Session, recipe_name: str):
-    sql = select(TrnRecipeModel).where(TrnRecipeModel.recipe_name.contains(recipe_name), TrnRecipeModel.is_active.is_(True)).options(
-        selectinload(TrnRecipeModel.user)
-    )
-    result = db.exec(sql).all()
-    return result
-
-def get_recipe_detail_by_recipe_id(db: Session, request: int):
-    sql = select(TrnRecipeModel).where(TrnRecipeModel.recipe_id == request).options(
-        selectinload(TrnRecipeModel.user),
-        selectinload(TrnRecipeModel.ingredients).options(
-            selectinload(DtlRecipeIngredientModel.ingredient),
-            selectinload(DtlRecipeIngredientModel.unit)
-        ),
-        selectinload(TrnRecipeModel.steps)
-    )
-    result = db.exec(sql).first()
-    return result
+        return None, ErrorCodeEnum.INTERNAL_ERROR
 
 def get_my_create_recipe(db: Session, user_id: int):
     sql = select(TrnRecipeModel).where(TrnRecipeModel.user_id == user_id).options(

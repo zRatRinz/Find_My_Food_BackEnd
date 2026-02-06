@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
+from app.schemas.userStockDTO import StockInfoDTO
+from app.enums.types import ShoppingTypeEnum
 
 class AddShoppingItemInNewShoppingListDTO(BaseModel):
     item_name: str
@@ -8,13 +10,12 @@ class AddShoppingItemInNewShoppingListDTO(BaseModel):
     note: str | None = None
 
 class CreateNewShoppingListDTO(BaseModel):
-    shopping_type: str
+    shopping_type: ShoppingTypeEnum
     list_name: str
     items: list[AddShoppingItemInNewShoppingListDTO]
 
 class AddShoppingItemToShoppingListDTO(AddShoppingItemInNewShoppingListDTO):
     shopping_list_id: int
-    
 
 class UpdateShoppingItemStatusDTO(BaseModel):
     # shopping_item_id: int
@@ -56,3 +57,20 @@ class ShoppingListResponseDTO(BaseModel):
     items: list[ShoppingItemResponseDTO] = [] 
 
     model_config = ConfigDict(from_attributes=True)
+
+class ShoppingPreviewDTO(BaseModel):
+    ingredient_id: int
+    item_name: str
+    recipe_quantity: float
+    recipe_unit_name: str
+    user_stock: StockInfoDTO | None = None
+
+class RecipeIngredientDTO(BaseModel):
+    ingredient_id: int
+    item_name: str
+    quantity: float
+    unit_id: int
+
+class AddRecipeIngredientToShoppingListDTO(BaseModel):
+    recipe_id: int
+    items: list[RecipeIngredientDTO]

@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from datetime import datetime
 from uuid import UUID
 from app.core import datetimezone
-from app.enums.shoppingCartEnum import ShoppingTypeEnum
+from app.enums.types import ShoppingTypeEnum
 from app.models.unitModel import UnitModel
 
 class ShoppingListModel(SQLModel, table=True):
@@ -28,6 +28,7 @@ class ShoppingItemModel(SQLModel, table=True):
     shopping_item_id: int = Field(default=None, primary_key=True)
     shopping_list_id: int = Field(foreign_key="trn_shopping_list.shopping_list_id")
     item_name: str
+    ingredient_id: int | None = Field(foreign_key="mas_ingredient.ingredient_id")
     quantity: int
     unit_id: int = Field(foreign_key="mas_unit.unit_id")
     is_check: bool = Field(default=False)

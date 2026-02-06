@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlmodel import Session
 from uuid import UUID
 from app.dependencies import get_current_user_optional
 from app.db import database
 from app.services import shoppingCartService
 from app.models.userModel import MasUserModel
-from app.enums.shoppingCartEnum import ShoppingTypeEnum
+from app.enums.types import ShoppingTypeEnum
 from app.schemas.shoppingCartDTO import (
     CreateNewShoppingListDTO, AddShoppingItemToShoppingListDTO, UpdateShoppingItemStatusDTO, UpdateShoppingItemQuantityDTO, UpdateShoppingItemUnitDTO,
-    UpdateShoppingItemResponseDTO, ShoppingListResponseDTO
+    UpdateShoppingItemResponseDTO, ShoppingListResponseDTO, AddRecipeIngredientToShoppingListDTO
 )
 from app.schemas.response import StandardResponse
+from app.enums.errorCodeEnum import ErrorCodeEnum
 
 router = APIRouter(prefix="/shoppingCart", tags=["shoppingCart"])
 
@@ -51,6 +52,29 @@ def add_item_to_shopping_list(request_body: AddShoppingItemToShoppingListDTO,
         return StandardResponse.success()
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
+    
+@router.post("/addItemToShoppingListByRecipeId")
+def add_item_to_shopping_list_by_recipe_id(response_obj: Response,
+                                           request_body: AddRecipeIngredientToShoppingListDTO,
+                                           guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
+                                           current_user: MasUserModel | None = Depends(get_current_user_optional),
+                                           db:Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response, error_code = shoppingCartService.add_item_to_shopping_list_by_recipe_id(db, request_body, user_id, guest_token)
+    if not response:
+        if error_code == ErrorCodeEnum.NOT_FOUND:
+            response_obj.status_code = status.HTTP_404_NOT_FOUND
+            return StandardResponse.fail(message="ไม่พบสูตรอาหาร")
+
+        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการเพิ่มลง shopping list")
+    return StandardResponse.success()
+
 
 @router.patch("/updateShoppingItemStatus/{item_id}", response_model=StandardResponse[UpdateShoppingItemResponseDTO])
 def update_shopping_item_status_by_shopping_list_id(item_id: int,
@@ -170,3 +194,24 @@ def get_shopping_list(shopping_type: ShoppingTypeEnum,
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
     
+@router.get("/getShoppingIngredientPreview/{recipe_id}")
+def get_shopping_Ingredient_Preview(response_obj: Response,
+                                    recipe_id: int,
+                                    guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
+                                    current_user: MasUserModel | None = Depends(get_current_user_optional),
+                                    db:Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response, error_code = shoppingCartService.get_shopping_ingredient_preview(db, recipe_id, user_id, guest_token)
+    if not response:
+        if error_code == ErrorCodeEnum.NOT_FOUND:
+            response_obj.status_code = status.HTTP_404_NOT_FOUND
+            return StandardResponse.fail(message="ไม่พบสูตรอาหาร")
+
+        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการดึง Preview")
+    return StandardResponse.success(data=response)

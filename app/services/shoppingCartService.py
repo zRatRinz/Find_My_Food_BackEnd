@@ -291,7 +291,6 @@ def get_shopping_ingredient_preview(db: Session, recipe_id: int, user_id: int | 
 
         preview_list = []
         for ingredient in ingredients:
-            # related_stocks = stock_group.get(ingredient.ingredient_id, [])
             related_stocks: list[TrnUserStockModel] = stock_group.get(ingredient.ingredient_id, [])
             select_stock_dto = None
             if related_stocks:
@@ -302,13 +301,10 @@ def get_shopping_ingredient_preview(db: Session, recipe_id: int, user_id: int | 
                 ))
 
                 best_stock = related_stocks[0]
-                # stock_unit_name = best_stock.unit.unit_name if best_stock.unit else "หน่วย"
                 select_stock_dto =  StockInfoDTO(
-                    # item_name = best_stock.item_name,
                     quantity = best_stock.quantity,
                     unit_name = best_stock.unit.unit_name
                 )
-            # recipe_unit_name = ingredient.unit.unit_name if ingredient.unit else "หน่วย"
             response_dto = ShoppingPreviewDTO(
                 ingredient_id = ingredient.ingredient_id,
                 item_name = ingredient.ingredient_name,

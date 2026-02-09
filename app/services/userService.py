@@ -1,10 +1,11 @@
 from fastapi import UploadFile
-from sqlmodel import Session, select, or_
+from sqlmodel import Session, select, or_, func
+from sqlalchemy.orm import selectinload
 from datetime import datetime
 from app.core import datetimezone, security, cloudinary
 from app.models.userModel import MasUserModel
-from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO, ChangePasswordDTO, UpdateUsernameDTO, SimpleUserInfoDTO
-
+from app.models.recipeModel import MapRecipeLikeModel, TrnRecipeModel
+from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO, ChangePasswordDTO, UpdateUsernameDTO, SimpleUserInfoDTO, UserLikeRecipeDTO
 
 def create_user_account(request: UserRegisterDTO, db:Session):
     try:
@@ -174,3 +175,29 @@ def get_simple_user_info(user_id: int, db: Session):
         username = result.username,
         image_url = result.image_url
     )
+
+def get_user_like_recipe(user_id: int, db: Session):
+    liked_recipe_ids = select(MapRecipeLikeModel.recipe_id).where(MapRecipeLikeModel.user_id == user_id)
+
+    main_sql = select(
+        TrnRecipeModel, 
+        func.count(MapRecipeLikeModel.user_id).label("like_count")
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).where(
+        TrnRecipeModel.is_active == True,
+        TrnRecipeModel.recipe_id.in_(liked_recipe_ids)
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).options(
+        selectinload(TrnRecipeModel.user)
+    )
+
+    result = db.exec(main_sql).all()
+    return [ UserLikeRecipeDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count, "is_liked": True}
+    ) for recipe, like_count in result]
+    

@@ -74,3 +74,7 @@ def get_simple_user_info(current_user: Annotated[MasUserModel, Depends(get_curre
         return StandardResponse.fail(message="ไม่พบข้อมูล")
     return StandardResponse.success(data=response)
     
+@router.get("/getUserLikeRecipe")
+def get_user_like_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], db: Session = Depends(database.get_db)):
+    response = userService.get_user_like_recipe(current_user.user_id, db)
+    return StandardResponse.success(data=response)

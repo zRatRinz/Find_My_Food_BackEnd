@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import date
 
 class UserLoginDTO(BaseModel):
@@ -54,3 +54,15 @@ class SimpleUserInfoDTO(BaseModel):
     email: str
     username: str
     image_url: str | None = None
+
+class UserLikeRecipeDTO(BaseModel):
+    recipe_id: int
+    recipe_name: str
+    description: str | None = None
+    cooking_time_min: int | None = None
+    image_url: str | None = None
+    username: str | None = None
+    like_count: int = Field(default=0)
+    is_liked: bool = False
+
+    model_config = ConfigDict(from_attributes=True)

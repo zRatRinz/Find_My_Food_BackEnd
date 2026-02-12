@@ -1,4 +1,4 @@
-from sqlmodel import Session, select, delete, func
+from sqlmodel import Session, select, delete, func, desc
 from sqlalchemy.orm import selectinload, joinedload
 from app.core import cloudinary, datetimezone
 from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
@@ -6,6 +6,7 @@ from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, 
     RecipeResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
 )
+from app.models.userStockModel import TrnUserStockModel
 from app.enums.errorCodeEnum import ErrorCodeEnum
 
 def create_new_recipe(db: Session, request: CreateNewRecipeDTO, user_id: int):
@@ -182,6 +183,70 @@ def get_all_recipe(db: Session):
     ).model_copy(
         update={"like_count": like_count}
     ) for recipe, like_count in result]
+
+def get_recommend_recipe_from_stock(db: Session, user_id: int):
+    try:
+        user_stock_ids = db.exec(select(TrnUserStockModel.ingredient_id).where(TrnUserStockModel.user_id == user_id)).all()
+        if not user_stock_ids:
+            return []
+        
+        match_ingredient_sql = select(
+            DtlRecipeIngredientModel.recipe_id,
+            func.count(DtlRecipeIngredientModel.ingredient_id).label("match_ingredient")
+        ).where(
+            DtlRecipeIngredientModel.ingredient_id.in_(user_stock_ids)
+        ).group_by(
+            DtlRecipeIngredientModel.recipe_id
+        ).cte("match_ingredient")
+
+        total_ingredient_sql = select(
+            DtlRecipeIngredientModel.recipe_id,
+            func.count(DtlRecipeIngredientModel.ingredient_id).label("total_ingredient")
+        ).where(
+            DtlRecipeIngredientModel.recipe_id.in_(select(match_ingredient_sql.c.recipe_id))
+        ).group_by(
+            DtlRecipeIngredientModel.recipe_id
+        ).cte("total_ingredient")
+
+        match_percentage_col = (
+            func.coalesce(match_ingredient_sql.c.match_ingredient, 0) * 100.0 / total_ingredient_sql.c.total_ingredient
+        ).label("match_percentage")  
+              
+        main_sql = select(
+            TrnRecipeModel,
+            func.count(MapRecipeLikeModel.user_id).label("like_count")
+        ).join(
+            match_ingredient_sql, match_ingredient_sql.c.recipe_id == TrnRecipeModel.recipe_id
+        ).join(
+            total_ingredient_sql, total_ingredient_sql.c.recipe_id == TrnRecipeModel.recipe_id
+        ).outerjoin(
+            MapRecipeLikeModel, MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+        ).where(
+            TrnRecipeModel.is_active == True,
+            match_percentage_col > 15
+        ).group_by(
+            TrnRecipeModel.recipe_id,
+            match_ingredient_sql.c.match_ingredient,
+            total_ingredient_sql.c.total_ingredient
+        ).options(
+            selectinload(TrnRecipeModel.user)
+        ).order_by(
+            desc(match_percentage_col)
+        ).limit(15)
+
+        result = db.exec(main_sql).all()
+        return [
+            RecipeResponseDTO.model_validate(
+                recipe, from_attributes=True
+            ).model_copy(
+                update={"like_count": like_count}
+            ) 
+            for recipe, like_count in result
+        ]
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        return None
 
 def get_recipe_by_name(db: Session, recipe_name: str):
     try:

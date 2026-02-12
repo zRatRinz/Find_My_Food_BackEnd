@@ -97,16 +97,14 @@ def update_recipe_step_by_recipe_id(current_user: Annotated[MasUserModel, Depend
     
 @router.get("/getAllRecipe", response_model=StandardResponse[list[RecipeResponseDTO]])
 def get_all_recipe(db:Session = Depends(database.get_db)):
-    try:
-        response = recipeService.get_all_recipe(db)
-        # response = [RecipeResponseDTO(
-        #     **recipe.model_dump(),
-        #     like_count=like_count
-        # ) for recipe, like_count in result]
-        return StandardResponse.success(data=response)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
-    
+    response = recipeService.get_all_recipe(db)
+    return StandardResponse.success(data=response)
+
+@router.get("/getRecommendRecipeFromStock")
+def get_recommend_recipe_from_stock(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], db:Session = Depends(database.get_db)):  
+    response = recipeService.get_recommend_recipe_from_stock(db, current_user.user_id)
+    return StandardResponse.success(data=response)
+
 @router.get("getRecipeByName/{request}", response_model=StandardResponse[list[RecipeResponseDTO]])
 def get_recipe_by_name(request:str, response_obj:Response, db:Session = Depends(database.get_db)):
     response = recipeService.get_recipe_by_name(db, request)

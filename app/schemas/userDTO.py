@@ -15,16 +15,12 @@ class UserRegisterDTO(BaseModel):
     email: str
     password: str
     username: str
-    first_name: str | None = None
-    last_name: str | None = None
     gender: str | None = None
     birth_date: date | None = None
 
 class UserAccountDTO(BaseModel):
     email: str
     username: str
-    first_name: str | None = None
-    last_name: str | None = None
     gender: str | None = None
     birth_date: date | None = None
     image_url: str | None = None

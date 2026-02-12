@@ -111,7 +111,8 @@ def google_login(request_body: GoogleLoginDTO, db: Session = Depends(database.ge
             login_time = userService.update_login_time(user, db)
             if not login_time:
                 return StandardResponse.fail(message="เกิดข้อผิดพลาดในเข้าสู่ระบบ")
-            access_token = security.create_access_token(data={"sub": str(user.user_id)})
+            access_token_exprires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MIN)
+            access_token = security.create_access_token(data={"sub": str(user.user_id)}, expires_delta=access_token_exprires)
             return TokenResponse(
                 access_token=access_token,
                 token_type="bearer"

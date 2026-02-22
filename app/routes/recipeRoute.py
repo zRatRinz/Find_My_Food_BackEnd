@@ -105,6 +105,14 @@ def get_recommend_recipe_from_stock(current_user: Annotated[MasUserModel, Depend
     response = recipeService.get_recommend_recipe_from_stock(db, current_user.user_id)
     return StandardResponse.success(data=response)
 
+@router.get("/getRecommendRecipeForYou")
+def get_recommend_recipe_for_you(response_obj:Response, current_user: Annotated[MasUserModel, Depends(get_current_active_user)], db:Session = Depends(database.get_db)):  
+    response = recipeService.get_recommend_recipe_for_you(db, current_user.user_id)
+    if response is None:
+        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการดึงรายการสูตรอาหาร")
+    return StandardResponse.success(data=response)
+
 @router.get("getRecipeByName/{request}", response_model=StandardResponse[list[RecipeResponseDTO]])
 def get_recipe_by_name(request:str, response_obj:Response, db:Session = Depends(database.get_db)):
     response = recipeService.get_recipe_by_name(db, request)

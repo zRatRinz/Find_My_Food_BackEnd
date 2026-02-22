@@ -1,5 +1,6 @@
 from sqlmodel import Session, select, delete, func, desc
 from sqlalchemy.orm import selectinload, joinedload
+from sklearn.metrics.pairwise import cosine_similarity
 from app.core import cloudinary, datetimezone
 from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
 from app.schemas.recipeDTO import (
@@ -8,6 +9,7 @@ from app.schemas.recipeDTO import (
 )
 from app.models.userStockModel import TrnUserStockModel
 from app.enums.errorCodeEnum import ErrorCodeEnum
+from app.services import vectorStoreService
 
 def create_new_recipe(db: Session, request: CreateNewRecipeDTO, user_id: int):
     try:
@@ -247,6 +249,59 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
         db.rollback()
         print(f"error: {ex}")
         return None
+    
+def get_recommend_recipe_for_you(db: Session, user_id: int):
+    try:
+        user_vector = vectorStoreService.get_user_vector(db, user_id)
+        if user_vector is None:
+            return []
+        
+        recipe_vectors = vectorStoreService.get_recipe_vectors(db)
+
+        scores = []
+        for recipe_id, vec in recipe_vectors.items():
+            score = cosine_similarity([user_vector], [vec])[0][0]
+            scores.append((recipe_id, score))
+
+        scores.sort(key=lambda x: x[1], reverse=True)
+
+        print(f"\n=== คะแนนความคล้าย (User ID: {user_id}) ===")
+        for r_id, s in scores[:15]:
+            print(f"Recipe ID: {r_id:2} | Score: {s:.4f}")
+        print("==========================================\n")
+
+        top_ids = [recipe_id for recipe_id, _ in scores[:15]]
+
+        if not top_ids:
+            return []
+
+        main_sql = select(
+                TrnRecipeModel,
+                func.count(MapRecipeLikeModel.user_id).label("like_count")
+            ).outerjoin(
+                MapRecipeLikeModel, MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+            ).where(
+                TrnRecipeModel.recipe_id.in_(top_ids)
+            ).group_by(
+                TrnRecipeModel.recipe_id
+            ).options(
+                selectinload(TrnRecipeModel.user)
+            )
+        recipes = db.exec(main_sql).all()
+
+        recipe_dict = {recipe.recipe_id: (recipe, like_count) for recipe, like_count in recipes}
+        sorted_recipes = [recipe_dict[recipe_id] for recipe_id in top_ids if recipe_id in recipe_dict]
+        
+        return [ RecipeResponseDTO.model_validate(
+            recipe, from_attributes=True
+        ).model_copy(
+            update={"like_count": like_count}
+        ) for recipe, like_count in sorted_recipes]
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        return None
+
 
 def get_recipe_by_name(db: Session, recipe_name: str):
     try:

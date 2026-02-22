@@ -38,10 +38,15 @@ class TrnRecipeModel(SQLModel, table=True):
     user: "MasUserModel" = Relationship(back_populates="recipes")
     ingredients: list["DtlRecipeIngredientModel"] = Relationship(back_populates="recipe")
     steps: list["DtlRecipeStepModel"] = Relationship(back_populates="recipe")
+    recipe_tags: list["MapRecipeTagModel"] = Relationship(back_populates="recipe")
 
     @property
     def username(self) -> str | None:
         return self.user.username if self.user else None
+    
+    @property
+    def tags(self) -> list[str]:
+        return [rt.tag.tag_name for rt in self.recipe_tags if rt.tag]
 
 class DtlRecipeIngredientModel(SQLModel, table=True):
     __tablename__ = "dtl_recipe_ingredient"
@@ -76,3 +81,20 @@ class MapRecipeLikeModel(SQLModel, table=True):
     recipe_id: int = Field(foreign_key="trn_recipe.recipe_id", primary_key=True)
     user_id: int = Field(foreign_key="mas_user.user_id", primary_key=True)
     create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
+
+class MapRecipeTagModel(SQLModel, table=True):
+    __tablename__ = "map_recipe_tag"
+    recipe_id: int = Field(foreign_key="trn_recipe.recipe_id", primary_key=True)
+    tag_id: int = Field(foreign_key="mas_tag.tag_id", primary_key=True)
+    create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
+
+    recipe: "TrnRecipeModel" = Relationship(back_populates="recipe_tags")
+    tag: "MasTagModel" = Relationship(back_populates="recipes")
+
+class MasTagModel(SQLModel, table=True):
+    __tablename__ = "mas_tag"
+    tag_id: int | None = Field(default=None, primary_key=True)
+    tag_name: str
+    tag_type: str
+
+    recipes: list["MapRecipeTagModel"] = Relationship(back_populates="tag")

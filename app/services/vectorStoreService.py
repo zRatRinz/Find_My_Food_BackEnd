@@ -3,7 +3,7 @@ from cachetools import LRUCache
 from threading import Lock
 from sqlmodel import Session, select
 import numpy as np
-from app.models.vectorModel import MapRecipeVectorModel, MapUserVectorModel, SysCacheVersionModel
+from app.models.systemModel import MapRecipeVectorModel, MapUserVectorModel, SysCacheVersionModel
 
 _recipe_cache_version = 0
 _user_cache_version = 0

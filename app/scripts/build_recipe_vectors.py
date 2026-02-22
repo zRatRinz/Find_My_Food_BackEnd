@@ -6,7 +6,7 @@ from app.core.utils.feature_builder import build_recipe_document
 from app.db.database import engine
 from app.models.recipeModel import TrnRecipeModel, MapRecipeTagModel
 from app.models.userModel import MasUserModel
-from app.models.vectorModel import MapRecipeVectorModel, SysModelVocabularyModel, SysCacheVersionModel
+from app.models.systemModel import MapRecipeVectorModel, SysModelVocabularyModel, SysCacheVersionModel
 
 def thai_tokenizer(text):
     return word_tokenize(text, engine="newmm")

@@ -3,7 +3,7 @@ import numpy as np
 from app.db.database import engine
 from app.models.recipeModel import MapRecipeLikeModel
 from app.models.userModel import MasUserModel
-from app.models.vectorModel import MapRecipeVectorModel, MapUserVectorModel, SysCacheVersionModel
+from app.models.systemModel import MapRecipeVectorModel, MapUserVectorModel, SysCacheVersionModel
 
 def run():
     with Session(engine) as db:

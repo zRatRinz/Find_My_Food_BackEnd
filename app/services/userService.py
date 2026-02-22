@@ -75,7 +75,7 @@ def create_user_account_with_google(request: MasUserModel, db:Session):
 #     return username_result
 
 def authenticate_user(username:str, password:str, db:Session):
-    user_result = get_user_by_username(username, db)
+    user_result = get_user_by_username_or_email(username, db)
     if not user_result:
         return False
     
@@ -95,10 +95,15 @@ def update_login_time(user: MasUserModel, db: Session):
         db.rollback()
         return False
 
-def get_user_by_username(username:str, db: Session):
-    sql = select(MasUserModel).where(or_(MasUserModel.email == username, MasUserModel.username == username))
+def get_user_by_username_or_email(request:str, db: Session):
+    sql = select(MasUserModel).where(or_(MasUserModel.email == request, MasUserModel.username == request))
     user_result = db.exec(sql).first()
     return user_result
+
+def get_user_by_email(email:str, db: Session):
+    sql = select(MasUserModel.email).where(MasUserModel.email == email)
+    email_result = db.exec(sql).first()
+    return email_result
 
 def get_user_by_user_id(user_id: int, db: Session):
     sql = select(MasUserModel).where(MasUserModel.user_id == user_id)

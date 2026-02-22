@@ -26,3 +26,6 @@ API_KEY = os.getenv("API_KEY")
 API_SECRET = os.getenv("API_SECRET")
 CLOUD_USER_IMG = os.getenv("CLOUD_USER_IMG")
 CLOUD_FOOD_IMG = os.getenv("CLOUD_FOOD_IMG")
+
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")

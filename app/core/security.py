@@ -1,7 +1,7 @@
 from pwdlib import PasswordHash
 import jwt
 from datetime import datetime, timedelta, timezone
-
+import secrets
 from app.core.config import SECRET_KEY, ALGORITHM
 
 password_hash = PasswordHash.recommended()
@@ -21,3 +21,6 @@ def create_access_token(data:dict, expires_delta: timedelta | None = None):
     prepare_encode_data.update({"exp":expire})
     encoded_jwt = jwt.encode(prepare_encode_data, SECRET_KEY, ALGORITHM)
     return encoded_jwt
+
+def generate_otp(length: int = 6):
+    return "".join(str(secrets.randbelow(10)) for _ in range(length))

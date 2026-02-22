@@ -62,3 +62,15 @@ class UserLikeRecipeDTO(BaseModel):
     is_liked: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserForgetPasswordEmailDTO(BaseModel):
+    email: str
+
+class VerifyOTPDTO(BaseModel):
+    email: str
+    otp: str
+
+class ResetPasswordDTO(BaseModel):
+    email: str
+    otp: str
+    new_password: str

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from sqlmodel import Session
@@ -10,9 +10,10 @@ from datetime import timedelta
 from app.core.config import GOOGLE_ANDROID_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MIN
 from app.core import security
 from app.db import database
-from app.services import userService
+from app.enums.errorCodeEnum import ErrorCodeEnum
+from app.services import userService, authService
 from app.models.userModel import MasUserModel
-from app.schemas.userDTO import UserAccountDTO, GoogleRegisterDTO, GoogleLoginDTO
+from app.schemas.userDTO import UserAccountDTO, GoogleRegisterDTO, GoogleLoginDTO, UserForgetPasswordEmailDTO, VerifyOTPDTO, ResetPasswordDTO
 from app.schemas.response import TokenResponse, StandardResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -104,7 +105,7 @@ def google_login(request_body: GoogleLoginDTO, db: Session = Depends(database.ge
         id_info = id_token.verify_oauth2_token(request_body.id_token, requests.Request(), GOOGLE_ANDROID_CLIENT_ID)
         email = id_info["email"]
         google_id = id_info["sub"]
-        user = userService.get_user_by_username(email, db)
+        user = userService.get_user_by_username_or_email(email, db)
         if user:
             if user.provider != "google":
                 return StandardResponse.fail(message="บัญชีนี้ไม่ได้สมัครด้วย Google")
@@ -138,7 +139,7 @@ def google_register(request: GoogleRegisterDTO, db: Session = Depends(database.g
             return StandardResponse.fail(message=str(ex))
         
         email = payload.get("email")
-        existing = userService.get_user_by_username(email, db)
+        existing = userService.get_user_by_username_or_email(email, db)
         if existing:
             return StandardResponse.fail(
                 message="Email นี้ถูกใช้งานแล้ว"
@@ -176,3 +177,36 @@ def google_register(request: GoogleRegisterDTO, db: Session = Depends(database.g
     except Exception as ex:
         db.rollback()
         return StandardResponse.fail(message=str(ex))
+    
+@router.post("/forgetPassword/requestOTP")
+def request_otp(response_obj: Response, request_body: UserForgetPasswordEmailDTO, db: Session = Depends(database.get_db)):
+    response = authService.request_otp_process(request_body.email, db)
+    if response is None:
+        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการสร้าง OTP")
+    
+    return StandardResponse.success()
+
+@router.post("/forgetPassword/verifyOTP")
+def verify_otp(response_obj: Response, request_body: VerifyOTPDTO, db: Session = Depends(database.get_db)):
+    response, error_code = authService.verify_otp_process(request_body.email, request_body.otp, db)
+    if response is None:
+        if error_code == ErrorCodeEnum.BAD_REQUEST:
+            response_obj.status_code = status.HTTP_400_BAD_REQUEST
+            return StandardResponse.fail(message="OTP ไม่ถูกต้อง")
+        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการตรวจสอบ OTP")
+    
+    return StandardResponse.success()
+
+@router.post("/forgetPassword/resetPassword")
+def reset_password(response_obj: Response, request_body: ResetPasswordDTO, db: Session = Depends(database.get_db)):
+    response, error_code = authService.reset_password_process(request_body.email, request_body.otp, request_body.new_password, db)
+    if response is None:
+        if error_code == ErrorCodeEnum.BAD_REQUEST:
+            response_obj.status_code = status.HTTP_400_BAD_REQUEST
+            return StandardResponse.fail(message="OTP ไม่ถูกต้อง")
+        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน")
+    
+    return StandardResponse.success()

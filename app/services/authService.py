@@ -21,13 +21,13 @@ def request_otp_process(email: str, db: Session):
         )
 
         db.add(otp_record)
-        db.commit()
 
         send_email_result = emailService.send_otp_email(email, otp)
         if not send_email_result:
             db.rollback()
             return True
 
+        db.commit()
         print(f"[Email Service] ส่งอีเมลไปที่ {email})")
         return True
     

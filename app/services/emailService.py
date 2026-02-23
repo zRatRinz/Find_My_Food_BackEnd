@@ -2,7 +2,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import smtplib
 import requests
-from app.core.config import SENDER_EMAIL, SENDER_PASSWORD, BREVO_URL, BREVO_API_KEY, BREVO_SENDER_EMAIL
+from app.core.config import BREVO_URL, BREVO_API_KEY, BREVO_SENDER_EMAIL
 
 # def send_otp_email(receiver_email: str, otp: str):
 #     try:

@@ -96,8 +96,9 @@ def update_recipe_step_by_recipe_id(current_user: Annotated[MasUserModel, Depend
         return StandardResponse.fail(message=str(ex))
     
 @router.get("/getAllRecipe", response_model=StandardResponse[list[RecipeResponseDTO]])
-def get_all_recipe(db:Session = Depends(database.get_db)):
-    response = recipeService.get_all_recipe(db)
+def get_all_recipe(current_user: MasUserModel | None = Depends(get_current_user_optional), db:Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    response = recipeService.get_all_recipe(user_id, db)
     return StandardResponse.success(data=response)
 
 @router.get("/getRecommendRecipeFromStock")
@@ -114,8 +115,12 @@ def get_recommend_recipe_for_you(response_obj:Response, current_user: Annotated[
     return StandardResponse.success(data=response)
 
 @router.get("getRecipeByName/{request}", response_model=StandardResponse[list[RecipeResponseDTO]])
-def get_recipe_by_name(request:str, response_obj:Response, db:Session = Depends(database.get_db)):
-    response = recipeService.get_recipe_by_name(db, request)
+def get_recipe_by_name(request:str,
+                       response_obj:Response,
+                       current_user: MasUserModel | None = Depends(get_current_user_optional),
+                       db:Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    response = recipeService.get_recipe_by_name(user_id, request, db)
     if response is None:
         response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return StandardResponse.fail(message="เกิดข้อผิดพลาดในการดึงรายการสูตรอาหาร")

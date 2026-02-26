@@ -1,4 +1,4 @@
-from sqlmodel import Session, select, delete, func, desc
+from sqlmodel import Session, select, delete, func, desc, or_
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 from app.core import cloudinary, datetimezone
@@ -165,21 +165,30 @@ def unlike_recipe(db: Session, user_id: int, recipe_id: int):
         print(f"error: {ex}")
         return None, ErrorCodeEnum.INTERNAL_ERROR
     
-def get_all_recipe(db: Session):
-    sql = select(
+def get_all_recipe(user_id: int | None, db: Session):
+    if user_id:
+        visibility_condition = or_(
+            TrnRecipeModel.is_public == True,
+            TrnRecipeModel.user_id == user_id
+        )
+
+    else:
+        visibility_condition = TrnRecipeModel.is_public == True
+    
+    query = select(
         TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
         ).outerjoin(
             MapRecipeLikeModel,
             MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
         ).where(
-            TrnRecipeModel.is_active == True
+            TrnRecipeModel.is_active == True, visibility_condition
         ).group_by(
             TrnRecipeModel.recipe_id
         ).options(
             selectinload(TrnRecipeModel.user)
         )
     
-    result = db.exec(sql).all()
+    result = db.exec(query).all()
     return [ RecipeResponseDTO.model_validate(
         recipe, from_attributes=True
     ).model_copy(
@@ -275,13 +284,20 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
         if not top_ids:
             return []
 
+        visibility_condition = or_(
+                TrnRecipeModel.is_public == True,
+                TrnRecipeModel.user_id == user_id
+        )
+        
         main_sql = select(
                 TrnRecipeModel,
                 func.count(MapRecipeLikeModel.user_id).label("like_count")
             ).outerjoin(
                 MapRecipeLikeModel, MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
             ).where(
-                TrnRecipeModel.recipe_id.in_(top_ids)
+                TrnRecipeModel.recipe_id.in_(top_ids),
+                TrnRecipeModel.is_active == True,
+                visibility_condition
             ).group_by(
                 TrnRecipeModel.recipe_id
             ).options(
@@ -303,15 +319,26 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
         return None
 
 
-def get_recipe_by_name(db: Session, recipe_name: str):
+def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
     try:
+        if user_id:
+            visibility_condition = or_(
+                TrnRecipeModel.is_public == True,
+                TrnRecipeModel.user_id == user_id
+            )
+
+        else:
+            visibility_condition = TrnRecipeModel.is_public == True
+
         sql = select(
             TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
             ).outerjoin(
                 MapRecipeLikeModel,
                 MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
             ).where(
-                TrnRecipeModel.recipe_name.contains(recipe_name), TrnRecipeModel.is_active.is_(True)
+                TrnRecipeModel.is_active == True,
+                TrnRecipeModel.recipe_name.contains(recipe_name), 
+                visibility_condition
             ).group_by(
                 TrnRecipeModel.recipe_id
             ).options(

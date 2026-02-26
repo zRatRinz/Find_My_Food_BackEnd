@@ -22,7 +22,6 @@ async def get_current_user(token:Annotated[str, Depends(oauth2_scheme)], db:Sess
     )
 
     try:
-        print(f"DEBUG TOKEN: >>>{token}<<<")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if user_id is None:

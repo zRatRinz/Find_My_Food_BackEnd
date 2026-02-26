@@ -59,6 +59,7 @@ class DtlRecipeIngredientModel(SQLModel, table=True):
     recipe: "TrnRecipeModel" = Relationship(back_populates="ingredients")
     ingredient: "MasIngredientModel" = Relationship()
     unit: "UnitModel" = Relationship()
+    is_main_ingredient: bool = Field(default=False)
 
     @property
     def ingredient_name(self) -> str | None:

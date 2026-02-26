@@ -330,7 +330,7 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
         else:
             visibility_condition = TrnRecipeModel.is_public == True
 
-        sql = select(
+        query = select(
             TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
             ).outerjoin(
                 MapRecipeLikeModel,
@@ -344,7 +344,7 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
             ).options(
             selectinload(TrnRecipeModel.user)
         )
-        result = db.exec(sql).all()
+        result = db.exec(query).all()
         return [ RecipeResponseDTO.model_validate(
             recipe, from_attributes=True
         ).model_copy(
@@ -354,6 +354,38 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
         db.rollback()
         print(f"error: {ex}")
         return None
+
+def get_recipe_by_ai_name(user_id: int, recipe_name: list[str], db: Session):
+    if not recipe_name:
+        return []
+
+    visibility_condition = or_(
+        TrnRecipeModel.is_public == True,
+        TrnRecipeModel.user_id == user_id
+    )
+
+    name_condition = or_(*[TrnRecipeModel.recipe_name.contains(name) for name in recipe_name])
+
+    query = select(
+        TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).where(
+        TrnRecipeModel.is_active == True,
+        name_condition, 
+        visibility_condition
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).options(
+        selectinload(TrnRecipeModel.user)
+    )
+    result = db.exec(query).all()
+    return [ RecipeResponseDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count}
+    ) for recipe, like_count in result]
 
 def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | None = None):
     try:

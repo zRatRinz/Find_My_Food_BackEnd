@@ -26,9 +26,9 @@ async def upload_new_recipe_image(current_user: Annotated[MasUserModel, Depends(
         return StandardResponse.fail(message=str(ex))
 
 @router.post("/createNewRecipe")
-def create_new_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request: CreateNewRecipeDTO, db:Session = Depends(database.get_db)):
+def create_new_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request_body: CreateNewRecipeDTO, db:Session = Depends(database.get_db)):
     try:
-        response = recipeService.create_new_recipe(db, request, current_user.user_id)
+        response = recipeService.create_new_recipe(db, request_body, current_user.user_id)
         if not response:
             return StandardResponse.fail(message="บันทึกไม่สำเร็จ")
         return StandardResponse.success()

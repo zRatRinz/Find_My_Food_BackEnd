@@ -5,6 +5,7 @@ class CreateNewRecipeIngredientDTO(BaseModel):
     ingredient_id: int
     quantity: float = Field(gt=0, description="จำนวนต้องมากกว่า 0")
     unit_id: int
+    is_main_ingredient: bool
 
 class CreateNewRecipeStepDTO(BaseModel):
     step_no: int
@@ -62,7 +63,8 @@ class RecipeIngredientResponseDTO(BaseModel):
     quantity: float
     unit_id: int
     unit_name: str
-    
+    is_main_ingredient: bool
+
     model_config = ConfigDict(from_attributes=True)
 
 class RecipeStepResponseDTO(BaseModel):

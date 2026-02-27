@@ -1,48 +1,84 @@
 from PIL import Image
 import numpy as np
-import tensorflow as tf
+import ai_edge_litert.interpreter as tflite
 import io
 from google import genai
 from google.genai import types
 import json
 from sqlmodel import Session
 from app.core.config import GOOGLE_AI_STUDIO_KEY
-from app.ai.class_map import CLASS_MAP
 from app.enums.errorCodeEnum import ErrorCodeEnum
 from app.services import recipeService
 
 import time
 
-model = tf.keras.models.load_model("app/ai/MNV2_Project_2.keras") 
-CLASS_NAMES = ["food", "non_food"] 
+print("📦 กำลังโหลดโมเดล TF Lite...")
+interpreter = tflite.Interpreter(model_path="app/ai/model.tflite")
+interpreter.allocate_tensors()
 
-print("กำลังวอร์มอัป MobileNetV2 (Cold Start)...")
-dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
-model.predict(dummy_input)
-print("✅ วอร์มอัปเสร็จสิ้น!")
+# ดึงสเปคทางเข้า (Input) และทางออก (Output) ของโมเดล
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
+CLASS_NAMES = ["food", "non_food"]
+
+# (Optional) โค้ด Dummy วอร์มอัปเครื่องแก้ Cold Start
+dummy_input = np.zeros(input_details[0]['shape'], dtype=np.float32)
+interpreter.set_tensor(input_details[0]['index'], dummy_input)
+interpreter.invoke()
+print("วอร์มอัปโมเดล TF Lite พร้อมใช้งาน!")
+
+# model = tf.keras.models.load_model("app/ai/MNV2_Project_2.keras") 
+
+# print("กำลังวอร์มอัป MobileNetV2 (Cold Start)...")
+# dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
+# model.predict(dummy_input)
+# print("วอร์มอัปเสร็จสิ้น!")
 
 client = genai.Client(api_key=GOOGLE_AI_STUDIO_KEY)
+
+# food_schema = {
+#     "type": "OBJECT",
+#     "properties": {
+#         "is_food": {
+#             "type": "BOOLEAN", 
+#             "description": "True if the image contains food or beverage, False otherwise."
+#         },
+#         "predictions": {
+#             "type": "ARRAY",
+#             "description": "Top 3 predicted food names in Thai language. Empty array if not food.",
+#             "items": {
+#                 "type": "OBJECT",
+#                 "properties": {
+#                     "name": {"type": "STRING", "description": "Exact food name in Thai language"}
+#                 },
+#                 "required": ["name"]
+#             }
+#         }
+#     },
+#     "required": ["is_food","predictions"]
+# }
 
 food_schema = {
     "type": "OBJECT",
     "properties": {
         "is_food": {
             "type": "BOOLEAN", 
-            "description": "True if the image contains food or beverage, False otherwise."
+            "description": "ตอบ true ถ้ารูปนี้คืออาหารหรือเครื่องดื่ม, ตอบ false ถ้ารูปนี้ไม่ใช่อาหาร"
         },
         "predictions": {
             "type": "ARRAY",
-            "description": "Top 3 predicted food names in Thai language. Empty array if not food.",
+            "description": "รายชื่ออาหารที่คาดเดา 3 อันดับแรก (ถ้ารูปนี้ไม่ใช่อาหาร ให้ตอบเป็น Array ว่าง [])",
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "name": {"type": "STRING", "description": "Exact food name in Thai language"}
+                    "name": {"type": "STRING", "description": "ชื่ออาหารเป็นภาษาไทย"}
                 },
                 "required": ["name"]
             }
         }
     },
-    "required": ["is_food","predictions"]
+    "required": ["is_food", "predictions"]
 }
 
 def predict_food_image(image_bytes: bytes):
@@ -51,8 +87,13 @@ def predict_food_image(image_bytes: bytes):
     image_array = np.array(image).astype("float32")
     image_batch = np.expand_dims(image_array, axis=0)
 
-    predictions = model.predict(image_batch)
+
+    interpreter.set_tensor(input_details[0]['index'], image_batch)
+    interpreter.invoke()
+    # predictions = model.predict(image_batch)
+    predictions = interpreter.get_tensor(output_details[0]['index'])
     scores = predictions[0]
+
         
     predicted_index = np.argmax(scores)
     confidence = scores[predicted_index]
@@ -68,11 +109,20 @@ def predict_food_image(image_bytes: bytes):
     
 def scan_food_image(image_bytes: bytes):
     img = Image.open(io.BytesIO(image_bytes))
+    # response = client.models.generate_content(
+    #     model="models/gemini-2.5-flash",
+    #     contents=[img],
+    #     config=types.GenerateContentConfig(
+    #         system_instruction="You are a food expert. Analyze the provided image. If it is food or beverage, set 'is_food' to true and provide the top 3 likely food names in Thai. If not, set 'is_food' to false and return an empty array for predictions.",
+    #         response_mime_type="application/json",
+    #         response_schema=food_schema,
+    #     ),
+    # )
     response = client.models.generate_content(
         model="models/gemini-2.5-flash",
-        contents=[img],
+        contents=[img, "รูปนี้ใช่อาหารหรือไม่? ถ้าใช่ให้บอกชื่ออาหารที่น่าจะเป็นไปได้ 3 อันดับแรก ถ้าไม่ใช่ให้ตอบว่าไม่ใช่"],
         config=types.GenerateContentConfig(
-            system_instruction="You are a food expert. Analyze the provided image. If it is food or beverage, set 'is_food' to true and provide the top 3 likely food names in Thai. If not, set 'is_food' to false and return an empty array for predictions.",
+            system_instruction="คุณคือผู้เชี่ยวชาญด้านอาหาร วิเคราะห์รูปภาพและตอบกลับในรูปแบบ JSON. หากเป็นอาหารให้ระบุ is_food เป็น true พร้อมรายชื่อ หากไม่ใช่ให้ระบุ is_food เป็น false และไม่ต้องใส่รายชื่ออาหาร",
             response_mime_type="application/json",
             response_schema=food_schema,
         ),

@@ -6,7 +6,8 @@ from google import genai
 from google.genai import types
 import json
 from sqlmodel import Session
-from app.core.config import GOOGLE_AI_STUDIO_KEY
+import base64
+from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL
 from app.enums.errorCodeEnum import ErrorCodeEnum
 from app.services import recipeService
 
@@ -110,7 +111,7 @@ def predict_food_image(image_bytes: bytes):
 def scan_food_image(image_bytes: bytes):
     img = Image.open(io.BytesIO(image_bytes))
     # response = client.models.generate_content(
-    #     model="models/gemini-2.5-flash",
+    #     model="models/",
     #     contents=[img],
     #     config=types.GenerateContentConfig(
     #         system_instruction="You are a food expert. Analyze the provided image. If it is food or beverage, set 'is_food' to true and provide the top 3 likely food names in Thai. If not, set 'is_food' to false and return an empty array for predictions.",
@@ -119,7 +120,7 @@ def scan_food_image(image_bytes: bytes):
     #     ),
     # )
     response = client.models.generate_content(
-        model="models/gemini-2.5-flash",
+        model=GOOGLE_ANALIZE_IMG_MODEL,
         contents=[img, "รูปนี้ใช่อาหารหรือไม่? ถ้าใช่ให้บอกชื่ออาหารที่น่าจะเป็นไปได้ 3 อันดับแรก ถ้าไม่ใช่ให้ตอบว่าไม่ใช่"],
         config=types.GenerateContentConfig(
             system_instruction="คุณคือผู้เชี่ยวชาญด้านอาหาร วิเคราะห์รูปภาพและตอบกลับในรูปแบบ JSON. หากเป็นอาหารให้ระบุ is_food เป็น true พร้อมรายชื่อ หากไม่ใช่ให้ระบุ is_food เป็น false และไม่ต้องใส่รายชื่ออาหาร",
@@ -172,6 +173,114 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
         db.rollback()
         print(f"error: {ex}")
         return None, ErrorCodeEnum.INTERNAL_ERROR
+    
+def generate_recipe_image(recipe_name: str, ingredients: list[str]):
+    try:
+        total_time = time.perf_counter()
+        ingredients_str = ", ".join(ingredients)
+        prompt_text = (
+            f"Professional and appetizing food photography of a Thai dish called '{recipe_name}'. "
+            f"This dish highlights the following key ingredients: {ingredients_str}. "
+            f"Focus on the final cooked dish with clear visibility of the solid ingredients like meat and herbs. "
+            f"Do NOT show any raw seasoning powders, salt, sugar, or sauce bottles. "
+            f"Soft natural window light, cozy homemade food style, appetizing, realistic and approachable."
+        )
+
+        print(f"กำลังสั่ง Nano Banana 4 วาดรูป: {prompt_text}")
+        t_start = time.perf_counter()
+        response = client.models.generate_content(
+            model=GOOGLE_IMG_GEN_MODEL,
+            contents=[prompt_text],
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                image_config=types.ImageConfig(
+                    aspect_ratio="1:1"
+                )
+            )
+        )
+        t_end = time.perf_counter()
+        print(f"Nano Banana 4 ใช้เวลา: {t_end - t_start:.2f} วินาที")
+
+        image_bytes = None
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.text is not None:
+                    print(f"AI ส่งข้อความมาด้วย: {part.text}")
+                elif part.inline_data is not None:
+                    image_bytes = part.inline_data.data
+                    break
+
+        if image_bytes:
+            img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            buffered = io.BytesIO()
+            img.save(buffered, format="JPEG", quality=85, optimize=True)
+            img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+            print("สร้างรูปและแปลงเป็น Base64 สำเร็จ!")
+            print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
+            return {
+                "recipe_name": recipe_name,
+                "image_base64": img_base64
+            }, None
+
+        else:
+            print("ไม่สามารถสร้างรูปและแปลงเป็น Base64 ได้!")
+            print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
+            return None, ErrorCodeEnum.INTERNAL_ERROR
+
+    except Exception as ex:
+        print(f"error: {ex}")
+        return None, ErrorCodeEnum.INTERNAL_ERROR
+
+# def generate_recipe_image(recipe_name: str, ingredients: list[str]):
+#     try:
+#         total_time = time.perf_counter()
+#         ingredients_str = ", ".join(ingredients)
+#         prompt_text = (
+#             f"Professional and appetizing food photography of a Thai dish called '{recipe_name}'. "
+#             f"This dish highlights the following key ingredients: {ingredients_str}. "
+#             f"Focus on the final cooked dish with clear visibility of the solid ingredients like meat and herbs. "
+#             f"Do NOT show any raw seasoning powders, salt, sugar, or sauce bottles. "
+#             f"Soft natural window light, cozy homemade food style, appetizing, realistic and approachable."
+#         )
+
+#         print(f"กำลังสั่ง Imagen 4 วาดรูป: {prompt_text}")
+#         t_start = time.perf_counter()
+#         response = client.models.generate_images(
+#             model=GOOGLE_IMG_GEN_MODEL,
+#             prompt=prompt_text,
+#             config={
+#                 "number_of_images": 1,
+#                 "aspect_ratio": "1:1"
+#             }
+#         )
+#         t_end = time.perf_counter()
+#         print(f"Imagen 4 ใช้เวลา: {t_end - t_start:.2f} วินาที")
+
+#         if response.generated_images:
+#             image_bytes = response.generated_images[0].image.image_bytes
+#             img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+#             buffered = io.BytesIO()
+#             img.save(buffered, format="JPEG", quality=85, optimize=True)
+
+#             img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            
+#             print("สร้างรูปและแปลงเป็น Base64 สำเร็จ!")
+#             print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
+#             return {
+#                 "recipe_name": recipe_name,
+#                 "image_base64": img_base64
+#             }, None
+
+#         else:
+#             print("ไม่สามารถสร้างรูปและแปลงเป็น Base64 ได้!")
+#             print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
+#             return None, ErrorCodeEnum.INTERNAL_ERROR
+
+#     except Exception as ex:
+#         print(f"error: {ex}")
+#         return None, ErrorCodeEnum.INTERNAL_ERROR
 
 # def predict_food_image(image_bytes: bytes):
 #     try:

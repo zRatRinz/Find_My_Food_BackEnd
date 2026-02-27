@@ -86,3 +86,7 @@ class IngredientResponseDTO(BaseModel):
 class LikeRecipeResponseDTO(BaseModel):
     like_count: int = Field(default=0)
     is_liked: bool
+
+class RecipePromptContentDTO(BaseModel):
+    recipe_name: str
+    ingredients: list[str]

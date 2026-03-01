@@ -82,6 +82,24 @@ food_schema = {
     "required": ["is_food", "predictions"]
 }
 
+ingredient_schema = {
+    "type": "OBJECT",
+    "properties": {
+        "has_ingredients": {
+            "type": "BOOLEAN",
+            "description": "ตอบ true ถ้าในภาพมี 'วัตถุดิบสด' ที่ยังไม่ปรุงสุก ตอบ false ถ้าเป็น 'อาหารที่ปรุงเสร็จแล้ว' หรือรูปอื่นๆ ที่ไม่ใช่วัตถุดิบ"
+        },
+        "ingredients": {
+            "type": "ARRAY",
+            "items": {
+                "type": "STRING"
+            },
+            "description": "รายชื่อวัตถุดิบสดสำหรับทำอาหารที่พบ (ถ้าเป็นอาหารปรุงสุกแล้วให้ตอบเป็น [] ทันที)"
+        }
+    },
+    "required": ["has_ingredients","ingredients"]
+}
+
 def predict_food_image(image_bytes: bytes):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = image.resize((224, 224))
@@ -148,7 +166,7 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
         t2_end = time.perf_counter()
         print(f"AI ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
 
-        if not ai_result or "predictions" not in ai_result:
+        if not ai_result or "predictions" not in ai_result or "is_food" not in ai_result:
             raise ValueError("AI ส่งข้อมูลกลับมาไม่ครบถ้วน")
         
         if ai_result["is_food"] == False:
@@ -162,7 +180,7 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"AI คาดเดาว่าเป็น: {predicted_names}")
 
         t3_start = time.perf_counter()
-        recipe_result = recipeService.get_recipe_by_ai_name(user_id, predicted_names, db)
+        recipe_result = recipeService.get_recipe_by_ai_recipe_name(user_id, predicted_names, db)
         t3_end = time.perf_counter()
         print(f"DB ใช้เวลา: {t3_end - t3_start:.2f} วินาที")
 
@@ -231,7 +249,64 @@ def generate_recipe_image(recipe_name: str, ingredients: list[str]):
     except Exception as ex:
         print(f"error: {ex}")
         return None, ErrorCodeEnum.INTERNAL_ERROR
+    
+def scan_ingredient_image(image_bytes: bytes):
+    img = Image.open(io.BytesIO(image_bytes))
 
+    response = client.models.generate_content(
+        model=GOOGLE_ANALIZE_IMG_MODEL,
+        contents=[img, "วิเคราะห์ภาพนี้ตามกฎที่กำหนดอย่างเคร่งครัด"],
+        config=types.GenerateContentConfig(
+            system_instruction="""
+                คุณคือผู้เชี่ยวชาญด้านวัตถุดิบอาหาร
+
+                **กฎเหล็กที่ต้องปฏิบัติตามอย่างเคร่งครัด:**
+                1. หากภาพที่เห็นคือ "อาหารที่ปรุงสำเร็จแล้ว" (เช่น อาหารในจาน, แกงในชาม, ขนมที่ทำเสร็จแล้ว) ห้ามแกะส่วนผสมเด็ดขาด! ให้ตอบ has_ingredients = false และ ingredients = [] ทันที
+                2. จะระบุชื่อวัตถุดิบได้ก็ต่อเมื่อ ภาพนั้นเป็น "วัตถุดิบสด" หรือของที่ยังไม่ประกอบร่างเป็นเมนูเท่านั้น
+                3. ให้ระบุเฉพาะวัตถุดิบที่มองเห็นได้ชัดเจนในภาพเท่านั้น ห้ามคาดเดา
+                4. ห้ามใส่ชื่อเมนูสำเร็จรูป
+                5. ห้ามใส่คำซ้ำ
+                6. ห้ามใส่หมวดหมู่กว้าง ๆ
+                
+                ตอบเป็น JSON ตาม schema เท่านั้น
+                """,
+            response_mime_type="application/json",
+            response_schema=ingredient_schema,
+        ),
+    )
+    return json.loads(response.text)
+    
+def analize_ingredient_image(user_id: int, image_bytes: bytes, db: Session):
+    try:
+        total_time = time.perf_counter()
+
+        t1_start = time.perf_counter()
+        ai_result = scan_ingredient_image(image_bytes)
+        t1_end = time.perf_counter()
+        print(f"AI ใช้เวลา: {t1_end - t1_start:.2f} วินาที")
+
+        if not ai_result or "ingredients" not in ai_result or "has_ingredients" not in ai_result:
+            raise ValueError("AI ส่งข้อมูลกลับมาไม่ครบถ้วน")
+            
+        if ai_result["has_ingredients"] == False:
+            print("ไม่มีวัตถุดิบ by AI")
+            return None, ErrorCodeEnum.NOT_FOUND
+
+        if not ai_result["ingredients"]:
+            return None, None
+            
+        print(f"AI คาดเดาว่าเป็น: {ai_result['ingredients']}")
+
+        t2_start = time.perf_counter()
+        recipe_result = recipeService.get_recipe_by_ai_ingredient_name(user_id, ai_result["ingredients"], db)
+        t2_end = time.perf_counter()
+        print(f"DB ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
+
+        print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
+        return recipe_result, None
+    except Exception as ex:
+        print(f"error: {ex}")
+        return None, ErrorCodeEnum.INTERNAL_ERROR
 # def generate_recipe_image(recipe_name: str, ingredients: list[str]):
 #     try:
 #         total_time = time.perf_counter()

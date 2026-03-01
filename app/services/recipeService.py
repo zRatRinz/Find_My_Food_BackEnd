@@ -1,4 +1,4 @@
-from sqlmodel import Session, select, delete, func, desc, or_
+from sqlmodel import Session, select, delete, func, desc, or_, distinct
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 from app.core import cloudinary, datetimezone
@@ -355,7 +355,7 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
         print(f"error: {ex}")
         return None
 
-def get_recipe_by_ai_name(user_id: int, recipe_name: list[str], db: Session):
+def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Session):
     if not recipe_name:
         return []
 
@@ -433,3 +433,46 @@ def get_ingredient_by_name(db: Session, ingredient_name: str):
     sql = select(MasIngredientModel).where(MasIngredientModel.ingredient_name.ilike(f"%{ingredient_name}%"))
     result = db.exec(sql).all()
     return result
+
+def get_recipe_by_ai_ingredient_name(user_id: int, ingredient_name: list[str], db: Session):
+    if not ingredient_name:
+        return []
+
+    visibility_condition = or_(
+        TrnRecipeModel.is_public == True,
+        TrnRecipeModel.user_id == user_id
+    )
+
+    ingredient_condition = or_(*[MasIngredientModel.ingredient_name.contains(name) for name in ingredient_name])
+    match_count = func.count(distinct(MasIngredientModel.ingredient_id)).label("match_count")
+    like_count_col = func.count(distinct(MapRecipeLikeModel.user_id)).label("like_count")
+    
+    query = select(
+        TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).join(
+        DtlRecipeIngredientModel, 
+        DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id
+    ).join(
+        MasIngredientModel, 
+        MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id
+    ).where(
+        TrnRecipeModel.is_active == True,
+        ingredient_condition, 
+        visibility_condition
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).order_by(
+        match_count.desc(),
+        like_count_col.desc()
+    ).options(
+        selectinload(TrnRecipeModel.user)
+    )
+    result = db.exec(query).all()
+    return [ RecipeResponseDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count}
+    ) for recipe, like_count in result]

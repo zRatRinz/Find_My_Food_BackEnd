@@ -24,7 +24,7 @@ def upload_temp_image_to_cloudinary(file):
         # return {"url": result.get("secure_url"), "public_id": result.get("public_id")}
     except Exception as ex:
         print(f"Cloudinary Error: {str(ex)}")
-        return None
+        raise
     
 # def move_temp_image_to_food_folder(recipe_id: int, temp_public_id: str):
 #     new_public_id = f"{CLOUD_FOOD_IMG}/food_img_{recipe_id}"

@@ -76,7 +76,7 @@ def send_otp_email(receiver_email: str, otp: str):
                 </div>
                 
                 <p style="text-align: center; color: #e74c3c; font-size: 14px; font-weight: bold;">
-                    รหัสนี้จะหมดอายุภายใน 15 นาที
+                    รหัสนี้จะหมดอายุภายใน 5 นาที
                 </p>
                 <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
                 <p style="font-size: 12px; color: #888888; text-align: center; line-height: 1.5;">

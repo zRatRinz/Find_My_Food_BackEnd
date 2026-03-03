@@ -1,15 +1,10 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from starlette.middleware.sessions import SessionMiddleware
-
+from app.core.exceptions import BadRequestException, NotFoundException
 from app.routes import recipeRoute, userRoute, authRoute, shoppingCartRoute, unitRoute, recipeAIRoute, userStockRoute, supportRoute
 
 app = FastAPI()
-
-SECRET_KEY = "TestSecretKey"
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-
 
 @app.get("/health", tags=["health"])
 async def health_check():
@@ -24,17 +19,6 @@ app.include_router(recipeAIRoute.router)
 app.include_router(userStockRoute.router)
 app.include_router(supportRoute.router)
 
-@app.exception_handler(HTTPException)
-async def custom_http_exception_handler(request: Request, ex: HTTPException):
-    return JSONResponse(
-        status_code = ex.status_code,
-        content = {
-            "status" : "fail",
-            "message" : ex.detail,
-            "data" : None
-        }
-    )
-
 @app.exception_handler(404)
 async def custom_not_found_handler(request,ex):
     return JSONResponse(
@@ -43,6 +27,28 @@ async def custom_not_found_handler(request,ex):
             "status":"fail",
             "message":"API Not Found",
             "data":None
+        }
+    )
+
+@app.exception_handler(BadRequestException)
+async def bad_request_handler(request: Request, ex: BadRequestException):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "status": "fail",
+            "message": str(ex),
+            "data": None
+        }
+    )
+
+@app.exception_handler(NotFoundException)
+async def not_found_handler(request: Request, ex: NotFoundException):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "status": "fail",
+            "message": str(ex),
+            "data": None
         }
     )
 
@@ -55,4 +61,28 @@ async def custom_validation_data_handler(request, ex):
             "message": "ข้อมูลที่ส่งมาไม่ถูกต้อง",
             "data": None
         },
+    )
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, ex: HTTPException):
+    return JSONResponse(
+        status_code = ex.status_code,
+        content = {
+            "status" : "fail",
+            "message" : ex.detail,
+            "data" : None
+        }
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, ex: Exception):
+    print(f"System Crash: {str(ex)}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "fail",
+            "message": "เกิดข้อผิดพลาดที่ server กรุณาลองใหม่อีกครั้ง",
+            "data": None
+        }
     )

@@ -18,17 +18,6 @@ from app.schemas.response import TokenResponse, StandardResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# oauth = OAuth()
-# oauth.register(
-#     name = "google",
-#     client_id = GOOGLE_CLIENT_ID,
-#     client_secret = GOOGLE_CLIENT_SECRET,
-#     server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration",
-#     client_kwargs = {
-#         "scope": "openid email profile"
-#     }
-# )
-
 @router.post("/login")
 async def login(request: Annotated[OAuth2PasswordRequestForm, Depends()], db:Session = Depends(database.get_db)):
     try:
@@ -64,40 +53,6 @@ async def login(request: Annotated[OAuth2PasswordRequestForm, Depends()], db:Ses
         )
     except Exception as ex:
         return StandardResponse.fail(message=str(ex))
-
-# @router.get("/login/google")
-# async def login_with_google(request: Request): 
-#     redirect_url = request.url_for("auth_google")
-#     return await oauth.google.authorize_redirect(request, redirect_url)
-
-# @router.get("/google/callback")
-# async def auth_google(request: Request, db: Session = Depends(database.get_db)):
-#     try:
-#         token = await oauth.google.authorize_access_token(request)
-#         user_info = token.get("userinfo")
-#         email = user_info.get("email")
-#         google_id = user_info.get("sub")
-
-#         user = userService.get_user_by_username(email, db)
-#         if user:
-#             login_time = userService.update_login_time(user, db)
-#             if not login_time:
-#                 return StandardResponse.fail(message="เกิดข้อผิดพลาดในเข้าสู่ระบบ")
-#             access_token = security.create_access_token(data={"sub":str(user.user_id)})
-#             # return RedirectResponse(url="/", status_code=302)
-#             return TokenResponse(access_token=access_token, token_type="bearer", data="member")
-#         else:
-#             register_data = {
-#                 "email": email,
-#                 "type": "google_register"
-#             }
-#             temp_token = security.create_access_token(data=register_data)
-#             # return RedirectResponse()
-#             return TokenResponse(access_token=temp_token, token_type="bearer", data="register")
-
-#     except Exception as ex:
-#         print(ex)
-#         return StandardResponse.fail(message=str(ex))
 
 @router.post("/google/login")
 def google_login(request_body: GoogleLoginDTO, db: Session = Depends(database.get_db)):

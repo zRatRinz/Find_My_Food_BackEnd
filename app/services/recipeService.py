@@ -2,13 +2,13 @@ from sqlmodel import Session, select, delete, func, desc, or_, distinct
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 from app.core import cloudinary, datetimezone
+from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
+from app.models.userStockModel import TrnUserStockModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, 
     RecipeResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
 )
-from app.models.userStockModel import TrnUserStockModel
-from app.enums.errorCodeEnum import ErrorCodeEnum
 from app.services import vectorStoreService
 
 def create_new_recipe(db: Session, request: CreateNewRecipeDTO, user_id: int):
@@ -43,42 +43,42 @@ def create_new_recipe(db: Session, request: CreateNewRecipeDTO, user_id: int):
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return False
+        raise
     
 def update_recipe_header_by_recipe_id(db: Session, user_id: int, recipe_id: int, request_body: UpdateRecipeHeaderDTO):
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+        
+    if recipe.user_id != user_id:
+        print(f"Error: Not authorized to update recipe with ID {recipe_id}.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+        
     try:
-        recipe = db.get(TrnRecipeModel, recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {recipe_id} not found.")
-            return None,"ไม่พบรายการอาหารที่ต้องการแก้ไข"
-        
-        if recipe.user_id != user_id:
-            print(f"Error: Not authorized to update recipe with ID {recipe_id}.")
-            return None,"ไม่พบรายการอาหารที่ต้องการแก้ไข"
-        
         for field, value in request_body.model_dump().items():
             setattr(recipe, field, value)
 
         recipe.update_date = datetimezone.get_thai_now()
         db.commit()
         # db.refresh(recipe)
-        return True, None
+        return True
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการแก้ไขรายการอาหาร"
+        raise
     
 def update_recipe_ingredient_by_recipe_id(db: Session, user_id: int, recipe_id: int, request_body: UpdateRecipeIngredientListDTO):
-    try:
-        recipe = db.get(TrnRecipeModel, recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
 
-        if recipe.user_id != user_id:
-            print(f"Error: Not authorized to update recipe with ID {recipe_id}.")
-            return None ,"ไม่พบรายการอาหารที่ต้องการแก้ไข"
+    if recipe.user_id != user_id:
+        print(f"Error: Not authorized to update recipe with ID {recipe_id}.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
         
+    try:
         db.exec(delete(DtlRecipeIngredientModel).where(DtlRecipeIngredientModel.recipe_id == recipe_id))
         ingredients = [DtlRecipeIngredientModel(**ingredient.model_dump(), recipe_id=recipe_id) for ingredient in request_body.ingredients]
 
@@ -86,23 +86,23 @@ def update_recipe_ingredient_by_recipe_id(db: Session, user_id: int, recipe_id: 
         db.commit()
         # for ingredient in ingredients:
         #     db.refresh(ingredient)
-        return True, None
+        return True
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการแก้ไขวัตถุดิบ"
+        raise
     
 def update_recipe_step_by_recipe_id(db: Session, user_id: int, recipe_id: int, request_body: UpdateRecipeStepListDTO):
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+        
+    if recipe.user_id != user_id:
+        print(f"Error: Not authorized to update recipe with ID {recipe_id}.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+        
     try:
-        recipe = db.get(TrnRecipeModel, recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
-        
-        if recipe.user_id != user_id:
-            print(f"Error: Not authorized to update recipe with ID {recipe_id}.")
-            return None, "ไม่พบรายการอาหารที่ต้องการแก้ไข"
-        
         db.exec(delete(DtlRecipeStepModel).where(DtlRecipeStepModel.recipe_id == recipe_id))
         steps = [DtlRecipeStepModel(**step.model_dump(), recipe_id=recipe_id) for step in request_body.steps]
 
@@ -110,22 +110,23 @@ def update_recipe_step_by_recipe_id(db: Session, user_id: int, recipe_id: int, r
         db.commit()
         # for step in steps:
         #     db.refresh(step)
-        return True, None
+        return True
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการแก้ไขขั้นตอนการทำ"
+        raise
     
 def like_recipe(db: Session, user_id: int, recipe_id: int):
     try:
         recipe = db.get(TrnRecipeModel, recipe_id)
         if not recipe:
             print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, ErrorCodeEnum.NOT_FOUND
+            raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+
         like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
         like_exist = db.exec(like_exist_sql).first()
         if like_exist:
-            return None, ErrorCodeEnum.BAD_REQUEST
+            raise BadRequestException("คุณ like สูตรอาหารนี้ไปแล้ว")
         
         like = MapRecipeLikeModel(user_id=user_id, recipe_id=recipe_id)
         db.add(like)
@@ -135,23 +136,24 @@ def like_recipe(db: Session, user_id: int, recipe_id: int):
             .where(MapRecipeLikeModel.recipe_id == recipe_id)
         )
         is_liked = True
-        return LikeRecipeResponseDTO(like_count=new_count, is_liked=is_liked), None
+        return LikeRecipeResponseDTO(like_count=new_count, is_liked=is_liked)
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise
     
 def unlike_recipe(db: Session, user_id: int, recipe_id: int):
-    try:
-        recipe = db.get(TrnRecipeModel, recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, ErrorCodeEnum.NOT_FOUND
-        like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
-        like_exist = db.exec(like_exist_sql).first()
-        if not like_exist:
-            return None, ErrorCodeEnum.BAD_REQUEST
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
         
+    like_exist_sql = select(MapRecipeLikeModel).where(MapRecipeLikeModel.user_id == user_id, MapRecipeLikeModel.recipe_id == recipe_id)
+    like_exist = db.exec(like_exist_sql).first()
+    if not like_exist:
+        raise BadRequestException("คุณยังไม่ได้ like รายการนี้")
+        
+    try:    
         db.delete(like_exist)
         db.commit()
         new_count = db.scalar(
@@ -159,12 +161,12 @@ def unlike_recipe(db: Session, user_id: int, recipe_id: int):
             .where(MapRecipeLikeModel.recipe_id == recipe_id)
         )
         is_liked = False
-        return LikeRecipeResponseDTO(like_count=new_count, is_liked=is_liked), None
+        return LikeRecipeResponseDTO(like_count=new_count, is_liked=is_liked)
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
-    
+        raise
+
 def get_all_recipe(user_id: int | None, db: Session):
     if user_id:
         visibility_condition = or_(
@@ -257,7 +259,7 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None
+        raise
     
 def get_recommend_recipe_for_you(db: Session, user_id: int):
     try:
@@ -316,7 +318,7 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None
+        raise
 
 
 def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
@@ -353,7 +355,7 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None
+        raise
 
 def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Session):
     if not recipe_name:
@@ -388,12 +390,12 @@ def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Sessi
     ) for recipe, like_count in result]
 
 def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | None = None):
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการ")
+    
     try:
-        recipe = db.get(TrnRecipeModel, recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, ErrorCodeEnum.NOT_FOUND
-        # ingredients = db.exec(select(DtlRecipeIngredientModel).where(DtlRecipeIngredientModel.recipe_id == recipe_id)).all()
         ingredients = db.exec(
             select(DtlRecipeIngredientModel)
             .where(DtlRecipeIngredientModel.recipe_id == recipe_id)
@@ -416,11 +418,11 @@ def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | N
             ingredients = [RecipeIngredientResponseDTO.model_validate(ingredient) for ingredient in ingredients],
             steps = [RecipeStepResponseDTO.model_validate(step) for step in steps],
             is_liked = is_liked
-        ), None
+        )
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise
 
 def get_my_create_recipe(db: Session, user_id: int):
     sql = select(TrnRecipeModel).where(TrnRecipeModel.user_id == user_id).options(

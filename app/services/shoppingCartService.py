@@ -3,6 +3,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from uuid import UUID
 from collections import defaultdict
 from app.core import datetimezone
+from app.core.exceptions import NotFoundException
 from app.models.shoppingCartModel import ShoppingListModel, ShoppingItemModel
 from app.models.recipeModel import TrnRecipeModel
 from app.models.userStockModel import TrnUserStockModel
@@ -12,7 +13,6 @@ from app.schemas.shoppingCartDTO import (
 )
 from app.schemas.userStockDTO import StockInfoDTO
 from app.enums.types import ShoppingTypeEnum
-from app.enums.errorCodeEnum import ErrorCodeEnum
 
 def create_new_shopping_list(db:Session, request_body: CreateNewShoppingListDTO, user_id: int | None, guest_token: UUID | None = None):
     try:
@@ -42,38 +42,38 @@ def create_new_shopping_list(db:Session, request_body: CreateNewShoppingListDTO,
         db.commit()
         db.refresh(new_shopping_list)
         
-        return new_shopping_list, None
+        return new_shopping_list
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, str(ex)
+        raise
 
 def add_item_to_shopping_list(db:Session, request_body: AddShoppingItemToShoppingListDTO, user_id: int | None = None, guest_token: UUID | None = None):
+    shopping_list = db.get(ShoppingListModel, request_body.shopping_list_id)
+    if not shopping_list:
+        print(f"Error: Shopping list ID {request_body.shopping_list_id} not found.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการ")
+        
+    if shopping_list.user_id != user_id or guest_token != shopping_list.guest_token:
+        raise NotFoundException("คุณไม่มีสิทธิ์เพิ่มรายการในตะกร้านี้")
+        
     try:
-        shopping_list = db.get(ShoppingListModel, request_body.shopping_list_id)
-        if not shopping_list:
-            print(f"Error: Shopping list ID {request_body.shopping_list_id} not found.")
-            return False, "ไม่พบรายการสั่งซื้อที่ต้องการ"
-        
-        if shopping_list.user_id != user_id or guest_token != shopping_list.guest_token:
-            return None, "คุณไม่มีสิทธิ์เพิ่มรายการในตะกร้านี้"
-        
         new_item = ShoppingItemModel(**request_body.model_dump())
         db.add(new_item)
         db.commit()
-        return "success", None
+        return True
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, "เกิดข้อผิดพลาดในการเพิ่มรายการสั่งซื้อ"
-    
-def add_item_to_shopping_list_by_recipe_id(db:Session, request_body: AddRecipeIngredientToShoppingListDTO, user_id: int | None = None, guest_token: UUID | None = None):
-    try:
-        recipe = db.get(TrnRecipeModel, request_body.recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {request_body.recipe_id} not found.")
-            return False, ErrorCodeEnum.NOT_FOUND
+        raise
 
+def add_item_to_shopping_list_by_recipe_id(db:Session, request_body: AddRecipeIngredientToShoppingListDTO, user_id: int | None = None, guest_token: UUID | None = None):
+    recipe = db.get(TrnRecipeModel, request_body.recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {request_body.recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหาร")
+
+    try:
         existing_shopping_list_sql = select(ShoppingListModel).where(ShoppingListModel.list_name == recipe.recipe_name)
         if user_id:
             existing_shopping_list_sql = existing_shopping_list_sql.where(ShoppingListModel.user_id == user_id)
@@ -140,116 +140,117 @@ def add_item_to_shopping_list_by_recipe_id(db:Session, request_body: AddRecipeIn
 
         db.commit()
         db.refresh(shopping_list)
-        return shopping_list, None
+        return shopping_list
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise
     
 def update_shopping_item_status_by_shopping_item_id(db: Session, shopping_item_id: int, request_body: UpdateShoppingItemStatusDTO, user_id: int | None, guest_token: UUID | None = None):
+    item = db.get(ShoppingItemModel, shopping_item_id)
+    if not item:
+        print(f"Error: Shopping item ID {shopping_item_id} not found.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข")
+        
+    if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
+        print(f"Error: Not authorized to update shopping item.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข")
+        
     try:
-        item = db.get(ShoppingItemModel, shopping_item_id)
-        if not item:
-            print(f"Error: Shopping item ID {shopping_item_id} not found.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข"
-        
-        if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
-            print(f"Error: Not authorized to update shopping item.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข"
-        
         item.is_check = request_body.is_check
         item.update_date = datetimezone.get_thai_now()
         
         db.commit()
         db.refresh(item)
-        return item, None
+        return item
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาดในการแก้ไขรายการสั่งซื้อ"
+        raise
     
 def update_shopping_item_quantity_by_item_id(db: Session, item_id: int, request_body: UpdateShoppingItemQuantityDTO, user_id: int | None = None, guest_token: UUID | None = None):
+    item = db.get(ShoppingItemModel, item_id)
+    if not item:
+        print(f"Error: Shopping item ID {item_id} not found.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข")
+
+    if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
+        print(f"Error: Not authorized to update shopping item.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข")
+        
     try:
-        item = db.get(ShoppingItemModel, item_id)
-        if not item:
-            print(f"Error: Shopping item ID {item_id} not found.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข"
-        
-        if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
-            print(f"Error: Not authorized to update shopping item.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข"
-        
         item.quantity = request_body.quantity
         item.update_date = datetimezone.get_thai_now()
         
         db.commit()
         db.refresh(item)
-        return item, None
+        return item
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, "เกิดข้อผิดพลาดในการแก้ไขจํานวน"
+        raise
 
 def update_shopping_item_unit_by_item_id(db: Session, item_id: int, request_body: UpdateShoppingItemUnitDTO, user_id: int | None = None, guest_token: UUID | None = None):
+    item = db.get(ShoppingItemModel, item_id)
+    if not item:
+        print(f"Error: Shopping item ID {item_id} not found.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข")
+
+        
+    if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
+        print(f"Error: Not authorized to update shopping item.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข")
+        
     try:
-        item = db.get(ShoppingItemModel, item_id)
-        if not item:
-            print(f"Error: Shopping item ID {item_id} not found.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข"
-        
-        if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
-            print(f"Error: Not authorized to update shopping item.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการแก้ไข"
-        
         item.unit_id = request_body.unit_id
         item.update_date = datetimezone.get_thai_now()
         
         db.commit()
         db.refresh(item)
-        return item, None
+        return item
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, "เกิดข้อผิดพลาดในการแก้ไขหน่วย"
+        raise
     
 def delete_shopping_list_by_shopping_list_id(db: Session, list_id: int, user_id: int | None = None, guest_token: UUID | None = None):
+    list = db.get(ShoppingListModel, list_id)
+    if not list:
+        print(f"Error: Shopping list ID {list_id} not found.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการลบ")
+        
+    if list.user_id != user_id or guest_token != list.guest_token:
+        print(f"Error: Not authorized to delete shopping list.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการลบ")
+        
     try:
-        list = db.get(ShoppingListModel, list_id)
-        if not list:
-            print(f"Error: Shopping list ID {list_id} not found.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
-        
-        if list.user_id != user_id or guest_token != list.guest_token:
-            print(f"Error: Not authorized to delete shopping list.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
-        
         db.delete(list)
         db.commit()
-        return True, None
+        return True
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, "เกิดข้อผิดพลาดในการลบรายการสั่งซื้อ"
+        raise
     
 def delete_shopping_item_by_item_id(db: Session, item_id: int, user_id: int | None = None, guest_token: UUID | None = None):
+    item = db.get(ShoppingItemModel, item_id)
+    if not item:
+        print(f"Error: Shopping item ID {item_id} not found.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการลบ")
+        
+    if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
+        print(f"Error: Not authorized to delete shopping item.")
+        raise NotFoundException("ไม่พบรายการสั่งซื้อที่ต้องการลบ")
+    
     try:
-        item = db.get(ShoppingItemModel, item_id)
-        if not item:
-            print(f"Error: Shopping item ID {item_id} not found.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
-        
-        if item.shopping_list.user_id != user_id or guest_token != item.shopping_list.guest_token:
-            print(f"Error: Not authorized to delete shopping item.")
-            return None, "ไม่พบรายการสั่งซื้อที่ต้องการลบ"
-        
         db.delete(item)
         db.commit()
-        return True, None
+        return True
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, "เกิดข้อผิดพลาดในการลบรายการสั่งซื้อ"
-    
+        raise
+
 def get_shopping_list_by_user_id_or_guest_token(db:Session, shopping_type: str, user_id: int | None = None, guest_token: UUID | None = None):
     if user_id:
         sql = select(ShoppingListModel).where(ShoppingListModel.user_id == user_id, ShoppingListModel.shopping_type == shopping_type)
@@ -269,12 +270,12 @@ def get_shopping_list_by_user_id_or_guest_token(db:Session, shopping_type: str, 
     return result
 
 def get_shopping_ingredient_preview(db: Session, recipe_id: int, user_id: int | None = None, guest_token: UUID | None = None):
-    try:
-        recipe = db.get(TrnRecipeModel, recipe_id)
-        if not recipe:
-            print(f"Error: Recipe ID {recipe_id} not found.")
-            return None, ErrorCodeEnum.NOT_FOUND
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหาร")
 
+    try:
         ingredients = recipe.ingredients
         stock_group = defaultdict(list)
         if user_id:
@@ -314,9 +315,9 @@ def get_shopping_ingredient_preview(db: Session, recipe_id: int, user_id: int | 
             )
             preview_list.append(response_dto)
 
-        return preview_list, None
+        return preview_list
 
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise

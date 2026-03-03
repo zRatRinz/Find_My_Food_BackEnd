@@ -19,4 +19,4 @@ def create_feedback(user_id:int, request_body: FeedBackDTO, db: Session):
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None
+        raise

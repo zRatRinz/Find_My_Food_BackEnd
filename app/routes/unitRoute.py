@@ -9,8 +9,5 @@ router = APIRouter(prefix="/unit", tags=["unit"])
 
 @router.get("/", response_model=StandardResponse[list[UnitResponseDTO]])
 def get_all_unit(db: Session = Depends(database.get_db)):
-    try:
-        response = unitService.get_all_unit(db)
-        return StandardResponse.success(data=response)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    response = unitService.get_all_unit(db)
+    return StandardResponse.success(data=response)

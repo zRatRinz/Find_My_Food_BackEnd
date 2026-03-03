@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlmodel import Session
 from uuid import UUID
 from app.dependencies import get_current_user_optional
@@ -11,7 +11,6 @@ from app.schemas.shoppingCartDTO import (
     UpdateShoppingItemResponseDTO, ShoppingListResponseDTO, AddRecipeIngredientToShoppingListDTO
 )
 from app.schemas.response import StandardResponse
-from app.enums.errorCodeEnum import ErrorCodeEnum
 
 router = APIRouter(prefix="/shoppingCart", tags=["shoppingCart"])
 
@@ -20,42 +19,32 @@ def create_new_shopping_list(request_body: CreateNewShoppingListDTO,
                              guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),  
                              current_user: MasUserModel | None = Depends(get_current_user_optional), 
                              db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.create_new_shopping_list(db, request_body, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message="บันทึกไม่สำเร็จ")
-        return StandardResponse.success(data=response)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response = shoppingCartService.create_new_shopping_list(db, request_body, user_id, guest_token)
+    return StandardResponse.success(data=response)
     
 @router.post("/addItemToShoppingList")
 def add_item_to_shopping_list(request_body: AddShoppingItemToShoppingListDTO,
                               guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"), 
                               current_user: MasUserModel | None = Depends(get_current_user_optional), 
                               db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.add_item_to_shopping_list(db, request_body, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message=message)
-        return StandardResponse.success()
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response = shoppingCartService.add_item_to_shopping_list(db, request_body, user_id, guest_token)
+    return StandardResponse.success()
+
     
 @router.post("/addItemToShoppingListByRecipeId")
-def add_item_to_shopping_list_by_recipe_id(response_obj: Response,
-                                           request_body: AddRecipeIngredientToShoppingListDTO,
+def add_item_to_shopping_list_by_recipe_id(request_body: AddRecipeIngredientToShoppingListDTO,
                                            guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                                            current_user: MasUserModel | None = Depends(get_current_user_optional),
                                            db:Session = Depends(database.get_db)):
@@ -65,14 +54,7 @@ def add_item_to_shopping_list_by_recipe_id(response_obj: Response,
             status_code=401,
             detail="ต้อง login หรือเป็น guest ก่อน"
         )
-    response, error_code = shoppingCartService.add_item_to_shopping_list_by_recipe_id(db, request_body, user_id, guest_token)
-    if not response:
-        if error_code == ErrorCodeEnum.NOT_FOUND:
-            response_obj.status_code = status.HTTP_404_NOT_FOUND
-            return StandardResponse.fail(message="ไม่พบสูตรอาหาร")
-
-        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการเพิ่มลง shopping list")
+    response = shoppingCartService.add_item_to_shopping_list_by_recipe_id(db, request_body, user_id, guest_token)
     return StandardResponse.success()
 
 
@@ -82,19 +64,15 @@ def update_shopping_item_status_by_shopping_list_id(item_id: int,
                                                     guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                                                     current_user: MasUserModel | None = Depends(get_current_user_optional), 
                                                     db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.update_shopping_item_status_by_shopping_item_id(db, item_id, request_body, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message=message)
-        return StandardResponse.success(data=response)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response, message = shoppingCartService.update_shopping_item_status_by_shopping_item_id(db, item_id, request_body, user_id, guest_token)
+    return StandardResponse.success(data=response)
+
     
 @router.patch("/updateShoppingItemQuantity/{item_id}", response_model=StandardResponse[UpdateShoppingItemResponseDTO])
 def update_shopping_item_quantity_by_item_id(item_id: int,
@@ -102,19 +80,15 @@ def update_shopping_item_quantity_by_item_id(item_id: int,
                                              guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                                              current_user: MasUserModel | None = Depends(get_current_user_optional),
                                              db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.update_shopping_item_quantity_by_item_id(db, item_id, request_body, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message=message)
-        return StandardResponse.success(data=response)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response, message = shoppingCartService.update_shopping_item_quantity_by_item_id(db, item_id, request_body, user_id, guest_token)
+    return StandardResponse.success(data=response)
+
 
 @router.patch("updateShoppingItemUnit/{item_id}", response_model=StandardResponse[UpdateShoppingItemResponseDTO])
 def update_shopping_item_unit_by_item_id(item_id: int, 
@@ -122,81 +96,64 @@ def update_shopping_item_unit_by_item_id(item_id: int,
                                          guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                                          current_user: MasUserModel | None = Depends(get_current_user_optional),
                                          db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.update_shopping_item_unit_by_item_id(db, item_id, request_body, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message=message)
-        return StandardResponse.success(data=response)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response, message = shoppingCartService.update_shopping_item_unit_by_item_id(db, item_id, request_body, user_id, guest_token)
+    return StandardResponse.success(data=response)
     
 @router.delete("/deleteShoppingList/{list_id}")
 def delete_shopping_list(list_id: int,
                          guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                          current_user: MasUserModel | None = Depends(get_current_user_optional),
                          db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.delete_shopping_list_by_shopping_list_id(db, list_id, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message=message)
-        return StandardResponse.success()
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response, message = shoppingCartService.delete_shopping_list_by_shopping_list_id(db, list_id, user_id, guest_token)
+    return StandardResponse.success()
+
 
 @router.delete("/deleteItemFromShoppingList/{item_id}")
 def delete_item_from_shopping_list(item_id: int,
                                    guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                                    current_user: MasUserModel | None = Depends(get_current_user_optional),
                                    db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response, message = shoppingCartService.delete_shopping_item_by_item_id(db, item_id, user_id, guest_token)
-        if not response:
-            return StandardResponse.fail(message=message)
-        return StandardResponse.success()
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response = shoppingCartService.delete_shopping_item_by_item_id(db, item_id, user_id, guest_token)
+    return StandardResponse.success()
 
 @router.get("/getShoppingList/{shopping_type}")
 def get_shopping_list(shopping_type: ShoppingTypeEnum,
                       guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                       current_user: MasUserModel | None = Depends(get_current_user_optional),
                       db:Session = Depends(database.get_db)):
-    try:
-        user_id = current_user.user_id if current_user else None
-        if not user_id and not guest_token:
-            raise HTTPException(
-                status_code=401,
-                detail="ต้อง login หรือเป็น guest ก่อน"
-            )
-        response = shoppingCartService.get_shopping_list_by_user_id_or_guest_token(db, shopping_type, user_id, guest_token)
-        response_dto = [
-            ShoppingListResponseDTO.model_validate(item) for item in response
-        ]
-        return StandardResponse.success(data=response_dto)
-    except Exception as ex:
-        return StandardResponse.fail(message=str(ex))
+    user_id = current_user.user_id if current_user else None
+    if not user_id and not guest_token:
+        raise HTTPException(
+            status_code=401,
+            detail="ต้อง login หรือเป็น guest ก่อน"
+        )
+    response = shoppingCartService.get_shopping_list_by_user_id_or_guest_token(db, shopping_type, user_id, guest_token)
+    response_dto = [
+        ShoppingListResponseDTO.model_validate(item) for item in response
+    ]
+    return StandardResponse.success(data=response_dto)
     
 @router.get("/getShoppingIngredientPreview/{recipe_id}")
-def get_shopping_Ingredient_Preview(response_obj: Response,
-                                    recipe_id: int,
+def get_shopping_Ingredient_Preview(recipe_id: int,
                                     guest_token: UUID | None = Header(default=None, alias="X-Guest-Token"),
                                     current_user: MasUserModel | None = Depends(get_current_user_optional),
                                     db:Session = Depends(database.get_db)):
@@ -206,12 +163,5 @@ def get_shopping_Ingredient_Preview(response_obj: Response,
             status_code=401,
             detail="ต้อง login หรือเป็น guest ก่อน"
         )
-    response, error_code = shoppingCartService.get_shopping_ingredient_preview(db, recipe_id, user_id, guest_token)
-    if not response:
-        if error_code == ErrorCodeEnum.NOT_FOUND:
-            response_obj.status_code = status.HTTP_404_NOT_FOUND
-            return StandardResponse.fail(message="ไม่พบสูตรอาหาร")
-
-        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการดึง Preview")
+    response = shoppingCartService.get_shopping_ingredient_preview(db, recipe_id, user_id, guest_token)
     return StandardResponse.success(data=response)

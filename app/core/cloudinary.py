@@ -5,6 +5,7 @@ from cloudinary.utils import cloudinary_url
 import uuid
 
 from app.core.config import CLOUD_NAME, API_KEY, API_SECRET, CLOUD_USER_IMG, CLOUD_FOOD_IMG
+from app.core.exceptions import ExternalServerException
 
 cloudinary.config(
     cloud_name = CLOUD_NAME,
@@ -24,7 +25,7 @@ def upload_temp_image_to_cloudinary(file):
         # return {"url": result.get("secure_url"), "public_id": result.get("public_id")}
     except Exception as ex:
         print(f"Cloudinary Error: {str(ex)}")
-        raise
+        raise ExternalServerException("เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ")
     
 # def move_temp_image_to_food_folder(recipe_id: int, temp_public_id: str):
 #     new_public_id = f"{CLOUD_FOOD_IMG}/food_img_{recipe_id}"
@@ -73,7 +74,7 @@ def upload_user_image_to_cloudinary(user_id: int, file):
         return result.get("secure_url")
     except Exception as ex:
         print(f"Cloudinary Error: {str(ex)}")
-        return None
+        raise ExternalServerException("เกิดข้อผิดพลาดในการอัพโหลดรูปภาพผู้ใช้งาน")
     
 def upload_food_image_to_cloudinary(food_id: int, file):
     try:

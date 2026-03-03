@@ -3,6 +3,7 @@ from sqlmodel import Session, select, or_, func
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 from app.core import datetimezone, security, cloudinary
+from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.userModel import MasUserModel
 from app.models.recipeModel import MapRecipeLikeModel, TrnRecipeModel
 from app.schemas.userDTO import UserLoginDTO, UserRegisterDTO, ChangePasswordDTO, UpdateUsernameDTO, SimpleUserInfoDTO, UserLikeRecipeDTO
@@ -12,12 +13,12 @@ def create_user_account(request: UserRegisterDTO, db:Session):
         existing_user_email_sql = select(MasUserModel).where(MasUserModel.email == request.email)
         existing_user_email_result = db.exec(existing_user_email_sql).first()
         if existing_user_email_result:
-            return None, "Email นี้มีคนใช้งานแล้ว"
+            raise BadRequestException("Email นี้มีคนใช้งานแล้ว")
         
         existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request.username)
         existing_user_username_result = db.exec(existing_user_username_sql).first()
         if existing_user_username_result:
-            return None, "Username นี้มีคนใช้งานแล้ว"
+            raise BadRequestException("Username นี้มีคนใช้งานแล้ว")
 
         hashed_password =  security.create_hash_password(request.password)
         new_user_profile = MasUserModel(
@@ -31,24 +32,26 @@ def create_user_account(request: UserRegisterDTO, db:Session):
         db.add(new_user_profile)
         db.commit()
         db.refresh(new_user_profile)
-        return new_user_profile.user_id, None
+        return new_user_profile.user_id
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาด"
-    
-def create_user_account_with_google(request: MasUserModel, db:Session):
-    try:
-        existing_user_email_sql = select(MasUserModel).where(MasUserModel.email == request.email)
-        existing_user_email_result = db.exec(existing_user_email_sql).first()
-        if existing_user_email_result:
-            return None, "Email นี้มีคนใช้งานแล้ว"
-        
-        existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request.username)
-        existing_user_username_result = db.exec(existing_user_username_sql).first()
-        if existing_user_username_result:
-            return None, "Username นี้มีคนใช้งานแล้ว"
+        raise
 
+def create_user_account_with_google(request: MasUserModel, db:Session):
+    existing_user_email_sql = select(MasUserModel).where(MasUserModel.email == request.email)
+    existing_user_email_result = db.exec(existing_user_email_sql).first()
+    if existing_user_email_result:
+        # return None, "Email นี้มีคนใช้งานแล้ว"
+        raise BadRequestException("Email นี้มีคนใช้งานแล้ว")
+        
+    existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request.username)
+    existing_user_username_result = db.exec(existing_user_username_sql).first()
+    if existing_user_username_result:
+        # return None, "Username นี้มีคนใช้งานแล้ว"
+        raise BadRequestException("Username นี้มีคนใช้งานแล้ว")
+
+    try:
         new_user_profile = MasUserModel(
             email = request.email,
             username = request.username,
@@ -60,11 +63,11 @@ def create_user_account_with_google(request: MasUserModel, db:Session):
         db.add(new_user_profile)
         db.commit()
         db.refresh(new_user_profile)
-        return new_user_profile, None
+        return new_user_profile
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return None, "เกิดข้อผิดพลาด"
+        raise
     
 # def login(db: Session):
 #     sql = select(UserAccountModel)
@@ -93,7 +96,7 @@ def update_login_time(user: MasUserModel, db: Session):
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return False
+        raise
 
 def get_user_by_username_or_email(request:str, db: Session):
     sql = select(MasUserModel).where(or_(MasUserModel.email == request, MasUserModel.username == request))
@@ -117,62 +120,63 @@ def get_user_info_by_id(user_id: int, db: Session):
 
 def update_user_image(current_user: MasUserModel, file: UploadFile, db: Session):
     image_url = cloudinary.upload_user_image_to_cloudinary(current_user.user_id, file)
-    if not image_url:
-        return ("fail", "Upload รูปภาพไม่สำเร็จ")
+    # if not image_url:
+    #     return ("fail", "Upload รูปภาพไม่สำเร็จ")
 
     try:
         current_user.image_url = image_url
         db.add(current_user)
         db.commit()
-        return ("success", None)
+        return True
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return ("fail","เกิดข้อผิดพลาด")
-    
-def update_user_username(current_user: MasUserModel, request_body: UpdateUsernameDTO, db: Session):
-    try:
-        if current_user.username == request_body.username:
-            return (None, "Username ใหม่ต้องไม่ซ้ํากับ Username ปัจจุบัน")
-        
-        existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request_body.username)
-        existing_user_username_result = db.exec(existing_user_username_sql).first()
-        if existing_user_username_result:
-            return (None, "Username นี้มีคนใช้งานแล้ว")
+        raise
 
+def update_user_username(current_user: MasUserModel, request_body: UpdateUsernameDTO, db: Session):
+    if current_user.username == request_body.username:
+        raise BadRequestException("Username ใหม่ต้องไม่ซ้ํากับ Username ปัจจุบัน")
+        
+    existing_user_username_sql = select(MasUserModel).where(MasUserModel.username == request_body.username)
+    existing_user_username_result = db.exec(existing_user_username_sql).first()
+    if existing_user_username_result:
+        raise BadRequestException("Username นี้มีคนใช้งานแล้ว")
+
+    try:
         current_user.username = request_body.username
         current_user.update_date = datetimezone.get_thai_now()
         db.commit()
-        return ("success", None)
+        return True
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return (None,"เกิดข้อผิดพลาด")
+        raise
 
 def change_user_password(current_user: MasUserModel, request_body: ChangePasswordDTO, db: Session):
+    if not security.verify_password(request_body.current_password, current_user.password):
+        raise BadRequestException("รหัสผ่านปัจจุบันไม่ถูกต้อง")
+
+    if request_body.new_password != request_body.confirm_password:
+        raise BadRequestException("รหัสผ่านไม่ตรงกัน")
+
+    if security.verify_password(request_body.new_password, current_user.password):
+        raise BadRequestException("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านปัจจุบัน")
+
     try:
-        if not security.verify_password(request_body.current_password, current_user.password):
-            return (None, "รหัสผ่านปัจจุบันไม่ถูกต้อง")
-
-        if request_body.new_password != request_body.confirm_password:
-            return (None, "รหัสผ่านไม่ตรงกัน")
-
-        if security.verify_password(request_body.new_password, current_user.password):
-            return (None, "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านปัจจุบัน")
         current_user.password = security.create_hash_password(request_body.new_password)
         current_user.update_date = datetimezone.get_thai_now()
         db.commit()
-        return ("success", None)
+        return True
     except Exception as ex:
         print(f"error: {ex}")
         db.rollback()
-        return (None,"เกิดข้อผิดพลาด")
-    
+        raise
+
 def get_simple_user_info(user_id: int, db: Session):
     sql = select(MasUserModel.username, MasUserModel.email, MasUserModel.image_url).where(MasUserModel.user_id == user_id)
     result = db.exec(sql).first()
     if not result:
-        return None
+        raise NotFoundException("ไม่พบผู้ใช้งาน")
     
     return SimpleUserInfoDTO(
         user_id = user_id,

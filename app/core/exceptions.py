@@ -6,3 +6,6 @@ class NotFoundException(Exception):
 
 class InternalServerException(Exception):
     pass
+
+class ExternalServerException(Exception):
+    pass

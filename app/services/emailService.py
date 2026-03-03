@@ -3,6 +3,7 @@ from email.mime.multipart import MIMEMultipart
 import smtplib
 import requests
 from app.core.config import BREVO_URL, BREVO_API_KEY, BREVO_SENDER_EMAIL
+from app.core.exceptions import ExternalServerException
 
 # def send_otp_email(receiver_email: str, otp: str):
 #     try:
@@ -35,23 +36,6 @@ from app.core.config import BREVO_URL, BREVO_API_KEY, BREVO_SENDER_EMAIL
 #         return False
 
 def send_otp_email(receiver_email: str, otp: str):
-    # payload = {
-    #     "sender": {"email": BREVO_SENDER_EMAIL},
-    #     "to": [{"email": receiver_email}],
-    #     "subject": "รหัส OTP สำหรับรีเซ็ตรหัสผ่าน",
-    #     "htmlContent": f"""
-    #         <h2>รีเซ็ตรหัสผ่าน</h2>
-    #         <p>OTP ของคุณคือ:</p>
-    #         <h1 style="letter-spacing:4px;">{otp}</h1>
-    #         <p>รหัสนี้จะหมดอายุภายใน 5 นาที</p>
-    #     """
-    # }
-
-    # headers = {
-    #     "accept": "application/json",
-    #     "api-key": BREVO_API_KEY,
-    #     "content-type": "application/json"
-    # }
     html_template = f"""
     <!DOCTYPE html>
     <html>
@@ -114,4 +98,4 @@ def send_otp_email(receiver_email: str, otp: str):
         return response.status_code in (200, 201, 202)
     except Exception as e:
         print("Brevo Error:", e)
-        return False
+        raise ExternalServerException("เกิดข้อผิดพลาดในการส่งอีเมล")

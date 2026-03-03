@@ -9,20 +9,20 @@ from app.schemas.response import TokenResponse, StandardResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 async def login(request_body: Annotated[OAuth2PasswordRequestForm, Depends()], db:Session = Depends(database.get_db)):
     response = authService.login_process(request_body.username, request_body.password, db)
-    return StandardResponse.success(data=response)
+    return response
 
-@router.post("/google/login")
+@router.post("/google/login", response_model=TokenResponse)
 async def google_login(request_body: GoogleLoginDTO, db: Session = Depends(database.get_db)):
     response = authService.google_login_process(request_body.id_token, db)
-    return StandardResponse.success(data=response)
+    return response
 
-@router.post("/google/register")
+@router.post("/google/register", response_model=TokenResponse)
 async def google_register(request_body: GoogleRegisterDTO, db: Session = Depends(database.get_db)):
     response = authService.google_register_process(request_body, db)
-    return StandardResponse.success(data=response)
+    return response
 
 @router.post("/forgetPassword/requestOTP")
 def request_otp(response_obj: Response, request_body: UserForgetPasswordEmailDTO, db: Session = Depends(database.get_db)):

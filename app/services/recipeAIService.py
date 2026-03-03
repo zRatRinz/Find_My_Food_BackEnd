@@ -8,6 +8,7 @@ import json
 from sqlmodel import Session
 import base64
 from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL
+from app.core.exceptions import NotFoundException
 from app.enums.errorCodeEnum import ErrorCodeEnum
 from app.services import recipeService
 
@@ -17,13 +18,11 @@ print("📦 กำลังโหลดโมเดล TF Lite...")
 interpreter = tflite.Interpreter(model_path="app/ai/model.tflite")
 interpreter.allocate_tensors()
 
-# ดึงสเปคทางเข้า (Input) และทางออก (Output) ของโมเดล
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
 CLASS_NAMES = ["food", "non_food"]
 
-# (Optional) โค้ด Dummy วอร์มอัปเครื่องแก้ Cold Start
 dummy_input = np.zeros(input_details[0]['shape'], dtype=np.float32)
 interpreter.set_tensor(input_details[0]['index'], dummy_input)
 interpreter.invoke()
@@ -159,7 +158,7 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
 
         if not prediction_result["is_food"]:
             print("ไม่ใช่อาหาร by MobileNetV2")
-            return None, ErrorCodeEnum.NOT_FOUND
+            raise NotFoundException("รูปภาพนี้ไม่ใช่อาหาร กรุณาเลือกรูปภาพอาหาร")
 
         t2_start = time.perf_counter()
         ai_result = scan_food_image(image_bytes)
@@ -167,14 +166,17 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"AI ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
 
         if not ai_result or "predictions" not in ai_result or "is_food" not in ai_result:
-            raise ValueError("AI ส่งข้อมูลกลับมาไม่ครบถ้วน")
-        
+            print("AI ส่งข้อมูลกลับมาไม่ครบถ้วน")
+            raise
+            
         if ai_result["is_food"] == False:
             print("ไม่ใช่อาหาร by AI")
-            return None, ErrorCodeEnum.NOT_FOUND
+                # return None, ErrorCodeEnum.NOT_FOUND
+            raise NotFoundException("รูปภาพนี้ไม่ใช่อาหาร กรุณาเลือกรูปภาพอาหาร")
 
         if not ai_result["predictions"]:
-            return None, None
+                # return None
+            raise NotFoundException("รูปภาพนี้ไม่ใช่อาหาร กรุณาเลือกรูปภาพอาหาร")
         
         predicted_names = [recipe["name"] for recipe in ai_result["predictions"]]
         print(f"AI คาดเดาว่าเป็น: {predicted_names}")
@@ -186,11 +188,11 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
 
         print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
 
-        return recipe_result, None
+        return recipe_result
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise
     
 def generate_recipe_image(recipe_name: str, ingredients: list[str]):
     try:
@@ -239,16 +241,16 @@ def generate_recipe_image(recipe_name: str, ingredients: list[str]):
             return {
                 "recipe_name": recipe_name,
                 "image_base64": img_base64
-            }, None
+            }
 
         else:
             print("ไม่สามารถสร้างรูปและแปลงเป็น Base64 ได้!")
             print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
-            return None, ErrorCodeEnum.INTERNAL_ERROR
+            raise
 
     except Exception as ex:
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise
     
 def scan_ingredient_image(image_bytes: bytes):
     img = Image.open(io.BytesIO(image_bytes))
@@ -286,14 +288,15 @@ def analize_ingredient_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"AI ใช้เวลา: {t1_end - t1_start:.2f} วินาที")
 
         if not ai_result or "ingredients" not in ai_result or "has_ingredients" not in ai_result:
-            raise ValueError("AI ส่งข้อมูลกลับมาไม่ครบถ้วน")
+            print("AI ส่งข้อมูลกลับมาไม่ครบถ้วน")
+            raise
             
         if ai_result["has_ingredients"] == False:
             print("ไม่มีวัตถุดิบ by AI")
-            return None, ErrorCodeEnum.NOT_FOUND
+            raise NotFoundException("ไม่พบรูปวัตถุดิบในภาพ กรุณาเลือกรูปภาพใหม่อีกครั้ง")
 
         if not ai_result["ingredients"]:
-            return None, None
+            raise NotFoundException("ไม่พบรูปวัตถุดิบในภาพ กรุณาเลือกรูปภาพใหม่อีกครั้ง")
             
         print(f"AI คาดเดาว่าเป็น: {ai_result['ingredients']}")
 
@@ -303,10 +306,10 @@ def analize_ingredient_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"DB ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
 
         print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
-        return recipe_result, None
+        return recipe_result
     except Exception as ex:
         print(f"error: {ex}")
-        return None, ErrorCodeEnum.INTERNAL_ERROR
+        raise
 # def generate_recipe_image(recipe_name: str, ingredients: list[str]):
 #     try:
 #         total_time = time.perf_counter()

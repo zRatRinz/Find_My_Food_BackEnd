@@ -1,9 +1,8 @@
-from fastapi import APIRouter, File, UploadFile, Depends, Response, status
+from fastapi import APIRouter, File, UploadFile, Depends
 from typing import Annotated
 from sqlmodel import Session
 from app.dependencies import get_current_active_user
 from app.db import database
-from app.enums.errorCodeEnum import ErrorCodeEnum
 from app.models.userModel import MasUserModel
 from app.schemas.recipeDTO import RecipePromptContentDTO
 from app.schemas.response import StandardResponse
@@ -12,40 +11,23 @@ from app.services import recipeAIService
 router = APIRouter(prefix="/recipeAI", tags=["recipeAI"])
 
 @router.post("/analyzeFoodImage")
-async def analyze_food_image(response_obj: Response, 
-                             current_user: Annotated[MasUserModel, Depends(get_current_active_user)], 
+async def analyze_food_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], 
                              file: UploadFile = File(...),
                              db: Session = Depends(database.get_db)):
     image_bytes = await file.read()
-    response, error_code = recipeAIService.analyze_food_image(current_user.user_id, image_bytes, db)
-    if response is None:
-        if error_code == ErrorCodeEnum.NOT_FOUND:
-            return StandardResponse.fail(message="รูปภาพนี้ไม่ใช่อาหาร กรุณาเลือกรูปภาพอาหาร")
-        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพอาหาร")
-
+    response = recipeAIService.analyze_food_image(current_user.user_id, image_bytes, db)
     return StandardResponse.success(data=response)
 
 @router.post("/generateRecipeImage")
-async def generate_recipe_image(response_obj: Response, 
-                                current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
+async def generate_recipe_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
                                 request_body: RecipePromptContentDTO,):
-    response, error_code = recipeAIService.generate_recipe_image(request_body.recipe_name, request_body.ingredients)
-    if response is None:
-        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการสร้างรูปภาพสูตรอาหาร")
+    response = recipeAIService.generate_recipe_image(request_body.recipe_name, request_body.ingredients)
     return StandardResponse.success(data=response)
 
 @router.post("/analyzeIngredientImage")
-async def analyze_ingredient_image(response_obj: Response, 
-                                    current_user: Annotated[MasUserModel, Depends(get_current_active_user)], 
-                                    file: UploadFile = File(...),
-                                    db: Session = Depends(database.get_db)):
+async def analyze_ingredient_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
+                                   file: UploadFile = File(...),
+                                   db: Session = Depends(database.get_db)):
     image_bytes = await file.read()
-    response, error_code = recipeAIService.analize_ingredient_image(current_user.user_id, image_bytes, db)
-    if response is None:
-        if error_code == ErrorCodeEnum.NOT_FOUND:
-            return StandardResponse.fail(message="ไม่พบรูปวัตถุดิบในภาพ กรุณาเลือกรูปภาพใหม่อีกครั้ง")
-        response_obj.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return StandardResponse.fail(message="เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพสูตรอาหาร")
+    response = recipeAIService.analize_ingredient_image(current_user.user_id, image_bytes, db)
     return StandardResponse.success(data=response)

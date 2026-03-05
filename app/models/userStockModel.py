@@ -17,3 +17,7 @@ class TrnUserStockModel(SQLModel, table=True):
     update_date: datetime | None = None
 
     unit: "UnitModel" = Relationship()
+
+    @property
+    def unit_name(self) -> str | None:
+        return self.unit.unit_name

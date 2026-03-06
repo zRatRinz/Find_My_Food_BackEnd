@@ -8,10 +8,10 @@ class StockInfoDTO(BaseModel):
     unit_name: str
 
 class AddUserStockDTO(BaseModel):
-    ingredient_id: int
+    ingredient_id: int | None = None
     item_name: str
     quantity: float
-    unit_id: int
+    unit_id: int = Field(gt=0)
     expire_date: date | None = None
     storage_location: StorageTypeEnum
 
@@ -23,7 +23,7 @@ class UpdateItemInUserStockDTO(BaseModel):
 
 class UserStockDTO(BaseModel):
     stock_id: int
-    ingredient_id: int
+    ingredient_id: int | None = None
     item_name: str
     quantity: float
     unit_id: int
@@ -32,3 +32,6 @@ class UserStockDTO(BaseModel):
     storage_location: str
     create_date: datetime
     update_date: datetime | None = None
+
+class ItemExpirationDTO(BaseModel):
+    expire_date: date | None = None

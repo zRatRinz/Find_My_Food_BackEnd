@@ -7,7 +7,7 @@ class TrnUserStockModel(SQLModel, table=True):
     __tablename__ = "trn_user_stock"
     stock_id: int = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="mas_user.user_id", index=True)
-    ingredient_id: int = Field(foreign_key="mas_ingredient.ingredient_id", index=True)
+    ingredient_id: int | None = Field(foreign_key="mas_ingredient.ingredient_id", index=True)
     item_name: str
     quantity: float
     unit_id: int = Field(foreign_key="mas_unit.unit_id")

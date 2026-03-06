@@ -21,6 +21,9 @@ class MasIngredientModel(SQLModel, table=True):
     image_url: str | None = None
     create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
     update_date: datetime | None = None
+    pantry_days: int | None = None
+    fridge_days: int | None = None
+    freezer_days: int | None = None
 
 class TrnRecipeModel(SQLModel, table=True):
     __tablename__ = "trn_recipe"

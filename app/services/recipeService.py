@@ -199,53 +199,63 @@ def get_all_recipe(user_id: int | None, db: Session):
 
 def get_recommend_recipe_from_stock(db: Session, user_id: int):
     try:
-        user_stock_ids = db.exec(select(TrnUserStockModel.ingredient_id).where(TrnUserStockModel.user_id == user_id)).all()
-        if not user_stock_ids:
+        user_stock = db.exec(select(TrnUserStockModel.ingredient_id, TrnUserStockModel.item_name).where(TrnUserStockModel.user_id == user_id)).all()
+        if not user_stock:
             return []
         
-        match_ingredient_sql = select(
-            DtlRecipeIngredientModel.recipe_id,
-            func.count(DtlRecipeIngredientModel.ingredient_id).label("match_ingredient")
-        ).where(
-            DtlRecipeIngredientModel.ingredient_id.in_(user_stock_ids)
-        ).group_by(
-            DtlRecipeIngredientModel.recipe_id
-        ).cte("match_ingredient")
+        ingredient_ids = [ingredient.ingredient_id for ingredient in user_stock if ingredient.ingredient_id]
+        item_names = [ingredient.item_name for ingredient in user_stock if ingredient.item_name]
 
-        total_ingredient_sql = select(
-            DtlRecipeIngredientModel.recipe_id,
-            func.count(DtlRecipeIngredientModel.ingredient_id).label("total_ingredient")
-        ).where(
-            DtlRecipeIngredientModel.recipe_id.in_(select(match_ingredient_sql.c.recipe_id))
-        ).group_by(
-            DtlRecipeIngredientModel.recipe_id
-        ).cte("total_ingredient")
+        match_count = func.count(DtlRecipeIngredientModel.ingredient_id)
 
-        match_percentage_col = (
-            func.coalesce(match_ingredient_sql.c.match_ingredient, 0) * 100.0 / total_ingredient_sql.c.total_ingredient
-        ).label("match_percentage")  
-              
-        main_sql = select(
-            TrnRecipeModel,
-            func.count(MapRecipeLikeModel.user_id).label("like_count")
-        ).join(
-            match_ingredient_sql, match_ingredient_sql.c.recipe_id == TrnRecipeModel.recipe_id
-        ).join(
-            total_ingredient_sql, total_ingredient_sql.c.recipe_id == TrnRecipeModel.recipe_id
-        ).outerjoin(
-            MapRecipeLikeModel, MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
-        ).where(
-            TrnRecipeModel.is_active == True,
-            match_percentage_col > 15
-        ).group_by(
-            TrnRecipeModel.recipe_id,
-            match_ingredient_sql.c.match_ingredient,
-            total_ingredient_sql.c.total_ingredient
-        ).options(
-            selectinload(TrnRecipeModel.user)
-        ).order_by(
-            desc(match_percentage_col)
-        ).limit(15)
+        total_count = (
+            select(func.count(DtlRecipeIngredientModel.ingredient_id))
+            .where(DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id)
+            .correlate(TrnRecipeModel)
+            .scalar_subquery()
+        )
+
+        match_percentage = (match_count * 100.0 / total_count).label("match_percentage")
+
+        main_sql = (
+            select(
+                TrnRecipeModel,
+                func.count(MapRecipeLikeModel.user_id).label("like_count"),
+                match_percentage
+            )
+            .join(
+                DtlRecipeIngredientModel,
+                DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id
+            )
+            .join(
+                MasIngredientModel,
+                MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id
+            )
+            .outerjoin(
+                MapRecipeLikeModel,
+                MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+            )
+            .where(
+                TrnRecipeModel.is_active == True,
+                or_(
+                    DtlRecipeIngredientModel.ingredient_id.in_(ingredient_ids),
+                    MasIngredientModel.ingredient_name.in_(item_names)
+                )
+            )
+            .group_by(
+                TrnRecipeModel.recipe_id
+            )
+            .having(
+                match_percentage > 15
+            )
+            .options(
+                selectinload(TrnRecipeModel.user)
+            )
+            .order_by(
+                desc(match_percentage)
+            )
+            .limit(15)
+        )
 
         result = db.exec(main_sql).all()
         return [
@@ -254,7 +264,7 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
             ).model_copy(
                 update={"like_count": like_count}
             ) 
-            for recipe, like_count in result
+            for recipe, like_count, _ in result
         ]
     except Exception as ex:
         db.rollback()

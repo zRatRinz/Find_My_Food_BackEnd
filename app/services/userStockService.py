@@ -1,10 +1,12 @@
 from sqlmodel import Session, select
 from sqlalchemy.orm import joinedload
 from sqlalchemy import delete
+from datetime import timedelta
 from app.core.exceptions import NotFoundException
 from app.core import datetimezone
 from app.enums.types import StorageTypeEnum
 from app.models.userStockModel import TrnUserStockModel
+from app.models.recipeModel import MasIngredientModel
 from app.schemas.userStockDTO import AddUserStockDTO, UpdateItemInUserStockDTO
 
 def add_user_stock(db: Session, user_id: int, request_body: AddUserStockDTO):
@@ -71,3 +73,23 @@ def get_user_stock_from_storage(db: Session, user_id: int, storage_location: Sto
         ).options(joinedload(TrnUserStockModel.unit))
     ).all()
     return result
+
+def get_item_expire_date(db: Session, storage_location: StorageTypeEnum, item_id: int, ):
+    item = db.exec(select(MasIngredientModel).where(MasIngredientModel.ingredient_id == item_id)).first()
+    if not item:
+        raise NotFoundException("ไม่พบรายการที่ต้องการแก้ไข")
+    
+    if storage_location == StorageTypeEnum.PANTRY:
+        days = item.pantry_days
+    elif storage_location == StorageTypeEnum.FRIDGE:
+        days = item.fridge_days
+    elif storage_location == StorageTypeEnum.FREEZER:
+        days = item.freezer_days
+    else:
+        days = None
+
+    if days is None:
+        return None
+    
+    expire_date = datetimezone.get_thai_now().date() + timedelta(days=days)
+    return expire_date

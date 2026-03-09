@@ -54,6 +54,7 @@ class RecipeResponseDTO(BaseModel):
     is_public: bool
     is_active: bool
     like_count: int = Field(default=0)
+    is_liked: bool = Field(default=False)
 
     model_config = ConfigDict(from_attributes=True)
 

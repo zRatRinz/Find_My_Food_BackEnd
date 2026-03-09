@@ -178,30 +178,37 @@ def get_all_recipe(user_id: int | None, db: Session):
         visibility_condition = TrnRecipeModel.is_public == True
     
     query = select(
-        TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
-        ).outerjoin(
-            MapRecipeLikeModel,
-            MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
-        ).where(
-            TrnRecipeModel.is_active == True, visibility_condition
-        ).group_by(
-            TrnRecipeModel.recipe_id
-        ).options(
-            selectinload(TrnRecipeModel.user)
-        )
+        TrnRecipeModel, 
+        func.count(MapRecipeLikeModel.user_id).label("like_count"),
+        func.count(MapRecipeLikeModel.user_id).filter(MapRecipeLikeModel.user_id == user_id).label("is_liked")
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).where(
+        TrnRecipeModel.is_active == True, visibility_condition
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).options(
+        selectinload(TrnRecipeModel.user)
+    )
     
     result = db.exec(query).all()
     return [ RecipeResponseDTO.model_validate(
         recipe, from_attributes=True
     ).model_copy(
-        update={"like_count": like_count}
-    ) for recipe, like_count in result]
+        update={"like_count": like_count, "is_liked": is_liked > 0}
+    ) for recipe, like_count, is_liked in result]
 
 def get_recommend_recipe_from_stock(db: Session, user_id: int):
     try:
         user_stock = db.exec(select(TrnUserStockModel.ingredient_id, TrnUserStockModel.item_name).where(TrnUserStockModel.user_id == user_id)).all()
         if not user_stock:
             return []
+        
+        visibility_condition = or_(
+            TrnRecipeModel.is_public == True,
+            TrnRecipeModel.user_id == user_id
+        )
         
         ingredient_ids = [ingredient.ingredient_id for ingredient in user_stock if ingredient.ingredient_id]
         item_names = [ingredient.item_name for ingredient in user_stock if ingredient.item_name]
@@ -221,6 +228,7 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
             select(
                 TrnRecipeModel,
                 func.count(MapRecipeLikeModel.user_id).label("like_count"),
+                func.count(MapRecipeLikeModel.user_id).filter(MapRecipeLikeModel.user_id == user_id).label("is_liked"),
                 match_percentage
             )
             .join(
@@ -237,6 +245,7 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
             )
             .where(
                 TrnRecipeModel.is_active == True,
+                visibility_condition,
                 or_(
                     DtlRecipeIngredientModel.ingredient_id.in_(ingredient_ids),
                     MasIngredientModel.ingredient_name.in_(item_names)
@@ -255,16 +264,16 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
                 desc(match_percentage)
             )
             .limit(15)
-        )
+        )   
 
         result = db.exec(main_sql).all()
         return [
             RecipeResponseDTO.model_validate(
                 recipe, from_attributes=True
             ).model_copy(
-                update={"like_count": like_count}
+                update={"like_count": like_count, "is_liked": is_liked > 0}
             ) 
-            for recipe, like_count, _ in result
+            for recipe, like_count, is_liked, _ in result
         ]
     except Exception as ex:
         db.rollback()
@@ -303,7 +312,8 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
         
         main_sql = select(
                 TrnRecipeModel,
-                func.count(MapRecipeLikeModel.user_id).label("like_count")
+                func.count(MapRecipeLikeModel.user_id).label("like_count"),
+                func.count(MapRecipeLikeModel.user_id).filter(MapRecipeLikeModel.user_id == user_id).label("is_liked")
             ).outerjoin(
                 MapRecipeLikeModel, MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
             ).where(
@@ -317,14 +327,14 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
             )
         recipes = db.exec(main_sql).all()
 
-        recipe_dict = {recipe.recipe_id: (recipe, like_count) for recipe, like_count in recipes}
+        recipe_dict = {recipe.recipe_id: (recipe, like_count, is_liked) for recipe, like_count, is_liked in recipes}
         sorted_recipes = [recipe_dict[recipe_id] for recipe_id in top_ids if recipe_id in recipe_dict]
         
         return [ RecipeResponseDTO.model_validate(
             recipe, from_attributes=True
         ).model_copy(
-            update={"like_count": like_count}
-        ) for recipe, like_count in sorted_recipes]
+            update={"like_count": like_count, "is_liked": is_liked > 0}
+        ) for recipe, like_count, is_liked in sorted_recipes]
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
@@ -343,7 +353,9 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
             visibility_condition = TrnRecipeModel.is_public == True
 
         query = select(
-            TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+            TrnRecipeModel,
+            func.count(MapRecipeLikeModel.user_id).label("like_count"),
+            func.count(MapRecipeLikeModel.user_id).filter(MapRecipeLikeModel.user_id == user_id).label("is_liked")
             ).outerjoin(
                 MapRecipeLikeModel,
                 MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
@@ -360,8 +372,8 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
         return [ RecipeResponseDTO.model_validate(
             recipe, from_attributes=True
         ).model_copy(
-            update={"like_count": like_count}
-        ) for recipe, like_count in result]
+            update={"like_count": like_count, "is_liked": is_liked > 0}
+        ) for recipe, like_count, is_liked in result]
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")

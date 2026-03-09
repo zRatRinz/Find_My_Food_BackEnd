@@ -29,7 +29,7 @@ async def google_register(request_body: GoogleRegisterDTO, db: Session = Depends
     response = authService.google_register_process(request_body, db)
     return response
 
-@router.post("/updateFCMToken")
+@router.patch("/updateFCMToken")
 def update_fcm_token(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
                      request_body: UpdateFCMTokenDTO,
                      db: Session = Depends(database.get_db)):

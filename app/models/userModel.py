@@ -17,6 +17,7 @@ class MasUserModel(SQLModel, table=True):
     birth_date: date | None = None
     image_url: str | None = None
     provider: str = Field(default="local")
+    fcm_token: str | None = None
     create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
     update_date: datetime | None = None
     last_login: datetime | None = None

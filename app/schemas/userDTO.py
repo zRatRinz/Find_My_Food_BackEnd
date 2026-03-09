@@ -34,6 +34,9 @@ class GoogleRegisterDTO(BaseModel):
 class GoogleLoginDTO(BaseModel):
     id_token: str
 
+class UpdateFCMTokenDTO(BaseModel):
+    fcm_token: str
+
 class VerifyPasswordDTO(BaseModel):
     password: str
 

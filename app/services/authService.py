@@ -5,7 +5,7 @@ from google.auth.transport import requests
 import jwt
 from app.core import security, datetimezone
 from app.core.config import ACCESS_TOKEN_EXPIRE_MIN, GOOGLE_ANDROID_CLIENT_ID, SECRET_KEY, ALGORITHM
-from app.core.exceptions import BadRequestException
+from app.core.exceptions import NotFoundException, BadRequestException
 from app.models.userModel import MasUserModel
 from app.models.systemModel import SysResetOTPModel
 from app.schemas.userDTO import UserAccountDTO, GoogleRegisterDTO
@@ -69,6 +69,19 @@ def google_login_process(request_id_token: str, db: Session):
         access_token=temp_token,
         token_type="bearer"
     )
+
+def update_fcm_token(user_id: int, fcm_token: str, db: Session):
+    user = db.get(MasUserModel, user_id)
+    if user is None:
+        raise NotFoundException("ไม่พบข้อมูลผู้ใช้งาน โปรดติดต่อเจ้าหน้าที่")
+    try:
+        user.fcm_token = fcm_token
+        db.commit()
+        return True
+    except Exception as ex:
+        print(f"error: {str(ex)}")
+        db.rollback()
+        raise
 
 def google_register_process(request_body: GoogleRegisterDTO, db: Session):
     try:

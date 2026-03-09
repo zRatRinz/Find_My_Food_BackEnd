@@ -2,7 +2,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from app.core.exceptions import BadRequestException, NotFoundException
-from app.routes import recipeRoute, userRoute, authRoute, shoppingCartRoute, unitRoute, recipeAIRoute, userStockRoute, supportRoute
+from app.routes import (
+    recipeRoute, userRoute, authRoute, shoppingCartRoute, unitRoute, recipeAIRoute, userStockRoute, supportRoute, notificationRoute
+)
 
 app = FastAPI()
 
@@ -18,6 +20,7 @@ app.include_router(unitRoute.router)
 app.include_router(recipeAIRoute.router)
 app.include_router(userStockRoute.router)
 app.include_router(supportRoute.router)
+app.include_router(notificationRoute.router)
 
 @app.exception_handler(404)
 async def custom_not_found_handler(request,ex):

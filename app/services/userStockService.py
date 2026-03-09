@@ -7,6 +7,7 @@ from app.core import datetimezone
 from app.enums.types import StorageTypeEnum
 from app.models.userStockModel import TrnUserStockModel
 from app.models.recipeModel import MasIngredientModel
+from app.models.userModel import MasUserModel
 from app.schemas.userStockDTO import AddUserStockDTO, UpdateItemInUserStockDTO
 
 def add_user_stock(db: Session, user_id: int, request_body: AddUserStockDTO):
@@ -93,3 +94,23 @@ def get_item_expire_date(db: Session, storage_location: StorageTypeEnum, item_id
     
     expire_date = datetimezone.get_thai_now().date() + timedelta(days=days)
     return expire_date
+
+def check_item_expire_date(db: Session):
+    date_now = datetimezone.get_thai_now().date()
+    expire_result = db.exec(
+        select(MasUserModel.user_id, MasUserModel.username, MasUserModel.fcm_token)
+        .join(TrnUserStockModel)
+        .where(
+            TrnUserStockModel.expire_date < date_now + timedelta(days=1),
+            MasUserModel.user_id != None    
+        ).distinct()
+    ).all()
+
+    return [
+        {
+            "user_id": user.user_id,
+            "username": user.username,
+            "fcm_token": user.fcm_token
+        }
+        for user in expire_result
+    ]

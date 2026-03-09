@@ -64,3 +64,8 @@ def get_item_expire_date(current_user: Annotated[MasUserModel, Depends(get_curre
                          db: Session = Depends(database.get_db)):
     response = userStockService.get_item_expire_date(db, storage_location, item_id)
     return StandardResponse.success(data=ItemExpirationDTO(expire_date=response))
+
+@router.get("/testCheckExpireItem")
+def test_check_expire_item(db: Session = Depends(database.get_db)):
+    response = userStockService.check_item_expire_date(db)
+    return StandardResponse.success(data=response)

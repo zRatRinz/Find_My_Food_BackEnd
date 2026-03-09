@@ -2,3 +2,4 @@
 myenv/
 env/
 .env
+firebase-adminsdk.json

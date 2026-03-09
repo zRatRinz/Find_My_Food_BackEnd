@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, Field, Relationship
 from datetime import date, datetime
 from app.core import datetimezone
 from app.models.unitModel import UnitModel
+# from app.models.userModel import MasUserModel
 
 class TrnUserStockModel(SQLModel, table=True):
     __tablename__ = "trn_user_stock"
@@ -17,7 +18,12 @@ class TrnUserStockModel(SQLModel, table=True):
     update_date: datetime | None = None
 
     unit: "UnitModel" = Relationship()
+    # user: "MasUserModel" = Relationship(back_populates="recipes")
 
     @property
     def unit_name(self) -> str | None:
         return self.unit.unit_name
+    
+    # @property
+    # def username(self) -> str | None:
+    #     return self.user.username if self.user else None

@@ -505,8 +505,14 @@ def get_recipe_by_ai_ingredient_name(user_id: int, ingredient_name: list[str], d
     ) for recipe, like_count in result]
 
 def get_recipe_category(db: Session):
-    categories = db.exec(select(MasTagModel).where(MasTagModel.tag_type == "category")).all()
-    return categories
+    categories = db.exec(select(MasTagModel.tag_id, MasTagModel.tag_name).where(MasTagModel.tag_type == "category")).all()
+    return [
+        {
+            "category_id": category_id, 
+            "category_name": category_name
+        }
+        for category_id, category_name in categories
+    ]
 
 def get_recipe_by_category(user_id: int | None, category_id: int, db: Session):
     if user_id:

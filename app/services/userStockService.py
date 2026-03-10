@@ -102,7 +102,7 @@ def check_item_expire_date(db: Session):
         .join(TrnUserStockModel)
         .where(
             TrnUserStockModel.expire_date < date_now + timedelta(days=1),
-            MasUserModel.user_id != None    
+            MasUserModel.fcm_token != None    
         ).distinct()
     ).all()
 

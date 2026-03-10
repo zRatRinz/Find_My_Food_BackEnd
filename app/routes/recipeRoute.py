@@ -7,7 +7,7 @@ from app.dependencies import get_current_active_user, get_current_user_optional
 from app.models.userModel import MasUserModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO,
-    RecipeDetailResponseDTO, IngredientResponseDTO
+    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO
 )
 from app.schemas.response import StandardResponse
 from app.services import recipeService
@@ -93,4 +93,17 @@ def get_my_create_recipe(current_user: Annotated[MasUserModel, Depends(get_curre
 @router.get("/getIngredientByName/{ingredient_name}", response_model=StandardResponse[list[IngredientResponseDTO]])
 def get_ingredient_by_name(ingredient_name:str, db:Session = Depends(database.get_db)):
     response = recipeService.get_ingredient_by_name(db, ingredient_name)
+    return StandardResponse.success(data=response)
+
+@router.get("/getRecipeCategory", response_model=StandardResponse[list[CategoryResponseDTO]])
+def get_recipe_category(db:Session = Depends(database.get_db)):
+    response = recipeService.get_recipe_category(db)
+    return StandardResponse.success(data=response)
+
+@router.get("/getRecipeByCategory/{category_id}")
+def get_recipe_by_category(category_id:int,
+                           current_user: MasUserModel | None = Depends(get_current_user_optional),
+                           db:Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    response = recipeService.get_recipe_by_category(user_id, category_id, db)
     return StandardResponse.success(data=response)

@@ -91,3 +91,7 @@ class LikeRecipeResponseDTO(BaseModel):
 class RecipePromptContentDTO(BaseModel):
     recipe_name: str
     ingredients: list[str]
+
+class CategoryResponseDTO(BaseModel):
+    category_id: int
+    category_name: str

@@ -3,7 +3,10 @@ from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 from app.core import cloudinary, datetimezone
 from app.core.exceptions import BadRequestException, NotFoundException
-from app.models.recipeModel import TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel
+from app.models.recipeModel import (
+    TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel, 
+    MasTagModel, MapRecipeTagModel
+)
 from app.models.userStockModel import TrnUserStockModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, 
@@ -500,3 +503,44 @@ def get_recipe_by_ai_ingredient_name(user_id: int, ingredient_name: list[str], d
     ).model_copy(
         update={"like_count": like_count}
     ) for recipe, like_count in result]
+
+def get_recipe_category(db: Session):
+    categories = db.exec(select(MasTagModel).where(MasTagModel.tag_type == "category")).all()
+    return categories
+
+def get_recipe_by_category(user_id: int | None, category_id: int, db: Session):
+    if user_id:
+        visibility_condition = or_(
+            TrnRecipeModel.is_public == True,
+            TrnRecipeModel.user_id == user_id
+        )
+
+    else:
+        visibility_condition = TrnRecipeModel.is_public == True
+    
+    query = select(
+        TrnRecipeModel, 
+        func.count(MapRecipeLikeModel.user_id).label("like_count"),
+        func.count(MapRecipeLikeModel.user_id).filter(MapRecipeLikeModel.user_id == user_id).label("is_liked")
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).join(
+        MapRecipeTagModel,
+        MapRecipeTagModel.recipe_id == TrnRecipeModel.recipe_id
+    ).where(
+        TrnRecipeModel.is_active == True,
+        visibility_condition,
+        MapRecipeTagModel.tag_id == category_id
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).options(
+        selectinload(TrnRecipeModel.user)
+    )
+    
+    result = db.exec(query).all()
+    return [ RecipeResponseDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count, "is_liked": is_liked > 0}
+    ) for recipe, like_count, is_liked in result]

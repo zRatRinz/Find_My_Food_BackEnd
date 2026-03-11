@@ -17,6 +17,8 @@ class CreateNewRecipeDTO(BaseModel):
     cooking_time_min: int | None = Field(default=None, gt=0)
     image_url: str | None = None
     is_public: bool
+    categories: list[int] = Field(min_length=1)
+    tags: list[int] | None = None
     ingredients: list[CreateNewRecipeIngredientDTO]
     steps: list[CreateNewRecipeStepDTO]
 
@@ -41,6 +43,8 @@ class UpdateRecipeHeaderDTO(BaseModel):
     cooking_time_min: int | None = None
     is_public: bool
     is_active: bool
+    categories: list[int] = Field(min_length=1)
+    tags: list[int] | None = None
 
 class RecipeResponseDTO(BaseModel):
     recipe_id: int
@@ -55,6 +59,7 @@ class RecipeResponseDTO(BaseModel):
     is_active: bool
     like_count: int = Field(default=0)
     is_liked: bool = Field(default=False)
+    tags: list[str]
 
     model_config = ConfigDict(from_attributes=True)
 

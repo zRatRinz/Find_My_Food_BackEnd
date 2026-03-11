@@ -61,12 +61,12 @@ def get_all_recipe(current_user: MasUserModel | None = Depends(get_current_user_
     response = recipeService.get_all_recipe(user_id, db)
     return StandardResponse.success(data=response)
 
-@router.get("/getRecommendRecipeFromStock")
+@router.get("/getRecommendRecipeFromStock", response_model=StandardResponse[list[RecipeResponseDTO]])
 def get_recommend_recipe_from_stock(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], db:Session = Depends(database.get_db)):  
     response = recipeService.get_recommend_recipe_from_stock(db, current_user.user_id)
     return StandardResponse.success(data=response)
 
-@router.get("/getRecommendRecipeForYou")
+@router.get("/getRecommendRecipeForYou", response_model=StandardResponse[list[RecipeResponseDTO]])
 def get_recommend_recipe_for_you(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], db:Session = Depends(database.get_db)):  
     response = recipeService.get_recommend_recipe_for_you(db, current_user.user_id)
     return StandardResponse.success(data=response)

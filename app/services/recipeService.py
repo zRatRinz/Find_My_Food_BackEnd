@@ -9,8 +9,8 @@ from app.models.recipeModel import (
 )
 from app.models.userStockModel import TrnUserStockModel
 from app.schemas.recipeDTO import (
-    CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, 
-    RecipeResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
+    CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO, 
+    RecipeHeaderResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
 )
 from app.services import vectorStoreService
 
@@ -37,11 +37,14 @@ def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: in
                 raise NotFoundException(f"ไม่พบหมวดหมู่หลัก (Category ID: {tag_id}) ในระบบ")
             
             if tag_dict[tag_id].tag_type != "category":
-                raise BadRequestException(f"Tag ID {tag_id} ไม่ใช่ประเภทหมวดหมู่หลัก")
+                raise NotFoundException(f"ไม่พบหมวดหมู่หลัก (Category ID: {tag_id}) ในระบบ")
 
         if tags_list:
             for tag_id in tags_list:
                 if tag_id not in tag_dict:
+                    raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
+                
+                if tag_dict[tag_id].tag_type == "category":
                     raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
         
         new_recipe.recipe_tags = [MapRecipeTagModel(tag_id=tag_id) for tag_id in all_tags]
@@ -102,11 +105,14 @@ def update_recipe_header_by_recipe_id(db: Session, user_id: int, recipe_id: int,
                 raise NotFoundException(f"ไม่พบหมวดหมู่หลัก (Category ID: {tag_id}) ในระบบ")
             
             if tag_dict[tag_id].tag_type != "category":
-                raise BadRequestException(f"Tag ID {tag_id} ไม่ใช่ประเภทหมวดหมู่หลัก")
+                raise NotFoundException(f"ไม่พบหมวดหมู่หลัก (Category ID: {tag_id}) ในระบบ")
 
         if tags_list:
             for tag_id in tags_list:
                 if tag_id not in tag_dict:
+                    raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
+                
+                if tag_dict[tag_id].tag_type == "category":
                     raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
 
         tags = [MapRecipeTagModel(recipe_id=recipe_id, tag_id=tag_id) for tag_id in all_tags]
@@ -500,7 +506,7 @@ def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | N
             is_liked = like_exist > 0
 
         return RecipeDetailResponseDTO(
-            recipe = RecipeResponseDTO.model_validate(recipe).model_copy(update={"like_count": like_count}),
+            recipe = RecipeHeaderResponseDTO.model_validate(recipe).model_copy(update={"like_count": like_count}),
             ingredients = [RecipeIngredientResponseDTO.model_validate(ingredient) for ingredient in ingredients],
             steps = [RecipeStepResponseDTO.model_validate(step) for step in steps],
             is_liked = is_liked
@@ -604,8 +610,95 @@ def get_recipe_by_category(user_id: int | None, category_id: int, db: Session):
     ).group_by(
         TrnRecipeModel.recipe_id
     ).options(
-        selectinload(TrnRecipeModel.user)
+        selectinload(TrnRecipeModel.user),
+        selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
     )
+    
+    result = db.exec(query).all()
+    return [ RecipeResponseDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count, "is_liked": is_liked > 0}
+    ) for recipe, like_count, is_liked in result]
+
+def get_recipe_filter_option(db: Session):
+    result = db.exec(
+        select(MasTagModel)
+    ).all()
+
+    categories = [
+        {
+            "category_id": tag.tag_id,
+            "category_name": tag.tag_name
+        } 
+        for tag in result if tag.tag_type == "category"
+    ]
+    tags = [
+        {
+            "tag_id": tag.tag_id,
+            "tag_name": tag.tag_name
+        } 
+        for tag in result if tag.tag_type != "category"
+    ]
+    
+    return {"categories": categories, "tags": tags}
+
+def get_search_recipe_filter_option(user_id: int | None, categories: list[int], tags: list[int], db: Session):
+    if user_id:
+        visibility_condition = or_(
+            TrnRecipeModel.is_public == True,
+            TrnRecipeModel.user_id == user_id
+        )
+
+    else:
+        visibility_condition = TrnRecipeModel.is_public == True
+
+    filter_options = categories + tags
+    if filter_options:
+        valid_tags = db.exec(
+                select(MasTagModel).where(MasTagModel.tag_id.in_(filter_options))
+        ).all()
+        tag_dict = {tag.tag_id: tag for tag in valid_tags}
+            
+        for tag_id in categories:
+            if tag_id not in tag_dict:
+                raise NotFoundException(f"ไม่พบหมวดหมู่หลัก (Category ID: {tag_id}) ในระบบ")
+            
+            if tag_dict[tag_id].tag_type != "category":
+                raise NotFoundException(f"ไม่พบหมวดหมู่หลัก (Category ID: {tag_id}) ในระบบ")
+
+        if tags:
+            for tag_id in tags:
+                if tag_id not in tag_dict:
+                    raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
+                
+                if tag_dict[tag_id].tag_type == "category":
+                    raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
+    
+    query = select(
+        TrnRecipeModel, 
+        func.count(MapRecipeLikeModel.user_id).label("like_count"),
+        func.count(MapRecipeLikeModel.user_id).filter(MapRecipeLikeModel.user_id == user_id).label("is_liked")
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).where(
+        TrnRecipeModel.is_active == True,
+        visibility_condition
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).options(
+        selectinload(TrnRecipeModel.user),
+        selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
+    )
+
+    if filter_options:
+        query = query.join(
+            MapRecipeTagModel,
+            MapRecipeTagModel.recipe_id == TrnRecipeModel.recipe_id
+        ).where(
+            MapRecipeTagModel.tag_id.in_(filter_options)
+        )
     
     result = db.exec(query).all()
     return [ RecipeResponseDTO.model_validate(

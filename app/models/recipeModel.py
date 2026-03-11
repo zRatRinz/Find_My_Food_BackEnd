@@ -50,6 +50,26 @@ class TrnRecipeModel(SQLModel, table=True):
     @property
     def tags(self) -> list[str]:
         return [rt.tag.tag_name for rt in self.recipe_tags if rt.tag]
+    
+    @property
+    def category_details(self) -> list[dict]: 
+        return [
+            {
+                "tag_id": rt.tag.tag_id, 
+                "tag_name": rt.tag.tag_name
+            } 
+            for rt in self.recipe_tags if rt.tag and rt.tag.tag_type == "category"
+        ]
+    
+    @property
+    def tag_details(self) -> list[dict]: 
+        return [
+            {
+                "tag_id": rt.tag.tag_id, 
+                "tag_name": rt.tag.tag_name
+            } 
+            for rt in self.recipe_tags if rt.tag and rt.tag.tag_type != "category"
+        ]
 
 class DtlRecipeIngredientModel(SQLModel, table=True):
     __tablename__ = "dtl_recipe_ingredient"

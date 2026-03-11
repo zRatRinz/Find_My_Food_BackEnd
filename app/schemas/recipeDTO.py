@@ -63,6 +63,30 @@ class RecipeResponseDTO(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TagResponseDTO(BaseModel):
+    tag_id: int
+    tag_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RecipeHeaderResponseDTO(BaseModel):
+    recipe_id: int
+    recipe_name: str
+    description: str | None = None
+    cooking_time_min: int | None = None
+    image_url: str | None = None
+    username: str | None = None
+    create_date: datetime | None = None
+    update_date: datetime | None = None
+    is_public: bool
+    is_active: bool
+    like_count: int = Field(default=0)
+    is_liked: bool = Field(default=False)
+    category_details: list[TagResponseDTO]
+    tag_details: list[TagResponseDTO]
+
+    model_config = ConfigDict(from_attributes=True)
+
 class RecipeIngredientResponseDTO(BaseModel):
     ingredient_id: int
     ingredient_name: str
@@ -80,7 +104,7 @@ class RecipeStepResponseDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class RecipeDetailResponseDTO(BaseModel):
-    recipe: RecipeResponseDTO
+    recipe: RecipeHeaderResponseDTO
     ingredients: list[RecipeIngredientResponseDTO]
     steps: list[RecipeStepResponseDTO]
     is_liked: bool
@@ -100,3 +124,7 @@ class RecipePromptContentDTO(BaseModel):
 class CategoryResponseDTO(BaseModel):
     category_id: int
     category_name: str
+
+class RecipeFilterOptionResponseDTO(BaseModel):
+    categories: list[CategoryResponseDTO]
+    tags: list[TagResponseDTO]

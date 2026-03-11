@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile, Query
 from typing import Annotated
 from sqlmodel import Session
 from app.core import cloudinary
@@ -7,7 +7,7 @@ from app.dependencies import get_current_active_user, get_current_user_optional
 from app.models.userModel import MasUserModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO,
-    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO
+    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO, RecipeFilterOptionResponseDTO
 )
 from app.schemas.response import StandardResponse
 from app.services import recipeService
@@ -106,4 +106,18 @@ def get_recipe_by_category(category_id:int,
                            db:Session = Depends(database.get_db)):
     user_id = current_user.user_id if current_user else None
     response = recipeService.get_recipe_by_category(user_id, category_id, db)
+    return StandardResponse.success(data=response)
+
+@router.get("/getRecipeFilterOption", response_model=StandardResponse[RecipeFilterOptionResponseDTO])
+def get_recipe_filter_option(db:Session = Depends(database.get_db)):
+    response = recipeService.get_recipe_filter_option(db)
+    return StandardResponse.success(data=response)
+
+@router.get("/getSearchRecipeFilterOption", response_model=StandardResponse[list[RecipeResponseDTO]])
+def get_search_recipe_filter_option(categories: list[int] = Query(default=[]), 
+                                    tags: list[int] = Query(default=[]),
+                                    current_user: MasUserModel | None = Depends(get_current_user_optional), 
+                                    db:Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    response = recipeService.get_search_recipe_filter_option(user_id, categories, tags, db)
     return StandardResponse.success(data=response)

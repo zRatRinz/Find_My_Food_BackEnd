@@ -583,6 +583,16 @@ def get_recipe_category(db: Session):
         for category_id, category_name in categories
     ]
 
+def get_recipe_tag(db: Session):
+    tags = db.exec(select(MasTagModel.tag_id, MasTagModel.tag_name).where(MasTagModel.tag_type != "category")).all()
+    return [
+        {
+            "tag_id": tag_id, 
+            "tag_name": tag_name
+        }
+        for tag_id, tag_name in tags
+    ]
+
 def get_recipe_by_category(user_id: int | None, category_id: int, db: Session):
     if user_id:
         visibility_condition = or_(

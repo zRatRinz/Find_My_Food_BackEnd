@@ -7,7 +7,7 @@ from app.dependencies import get_current_active_user, get_current_user_optional
 from app.models.userModel import MasUserModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO,
-    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO, RecipeFilterOptionResponseDTO
+    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO, RecipeFilterOptionResponseDTO, TagResponseDTO
 )
 from app.schemas.response import StandardResponse
 from app.services import recipeService
@@ -98,6 +98,11 @@ def get_ingredient_by_name(ingredient_name:str, db:Session = Depends(database.ge
 @router.get("/getRecipeCategory", response_model=StandardResponse[list[CategoryResponseDTO]])
 def get_recipe_category(db:Session = Depends(database.get_db)):
     response = recipeService.get_recipe_category(db)
+    return StandardResponse.success(data=response)
+
+@router.get("/getRecipeTag", response_model=StandardResponse[list[TagResponseDTO]])
+def get_recipe_tag(db:Session = Depends(database.get_db)):
+    response = recipeService.get_recipe_tag(db)
     return StandardResponse.success(data=response)
 
 @router.get("/getRecipeByCategory/{category_id}")

@@ -1,6 +1,7 @@
 from sqlmodel import Session, select, delete, func, desc, or_, distinct
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 from app.core import cloudinary, datetimezone
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.recipeModel import (
@@ -13,6 +14,7 @@ from app.schemas.recipeDTO import (
     RecipeHeaderResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
 )
 from app.services import vectorStoreService
+import time
 
 def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: int):
     try:
@@ -342,25 +344,80 @@ def get_recommend_recipe_from_stock(db: Session, user_id: int):
     
 def get_recommend_recipe_for_you(db: Session, user_id: int):
     try:
+        t1_start = time.perf_counter()
         user_vector = vectorStoreService.get_user_vector(db, user_id)
         if user_vector is None:
             return []
         
         recipe_vectors = vectorStoreService.get_recipe_vectors(db)
 
+        recipe_ids = list(recipe_vectors.keys())
+        recipe_matrix = np.array(list(recipe_vectors.values()))
+        user_vec_array = np.array([user_vector])
+
+        sim_scores = cosine_similarity(user_vec_array, recipe_matrix)[0]
+
+        stock_match_dict = {}
+        user_stock = db.exec(
+            select(
+                TrnUserStockModel.ingredient_id,
+                TrnUserStockModel.item_name
+            ).where(
+            TrnUserStockModel.user_id == user_id
+            )
+        ).all()
+
+        if user_stock:
+            ingredient_ids = [ingredient.ingredient_id for ingredient in user_stock if ingredient.ingredient_id]
+            item_names = [ingredient.item_name.strip() for ingredient in user_stock if ingredient.item_name]
+            if ingredient_ids or item_names:
+                total_count = func.nullif(
+                    select(func.count(DtlRecipeIngredientModel.ingredient_id))
+                    .where(DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id)
+                    .correlate(TrnRecipeModel)
+                    .scalar_subquery(),
+                    0
+                )
+                match_percentage = (func.count(DtlRecipeIngredientModel.ingredient_id) * 100.0 / total_count).label("match_percentage")
+
+                match_conditions = []
+                if ingredient_ids:
+                    match_conditions.append(DtlRecipeIngredientModel.ingredient_id.in_(ingredient_ids))
+                if item_names:
+                    match_conditions.append(MasIngredientModel.ingredient_name.in_(item_names))
+
+                stock_sql = (
+                    select(TrnRecipeModel.recipe_id, match_percentage)
+                    .join(DtlRecipeIngredientModel, DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id)
+                    .join(MasIngredientModel, MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id)
+                    .where(
+                        TrnRecipeModel.is_active == True,
+                        or_(
+                            *match_conditions
+                        )
+                    )
+                    .group_by(TrnRecipeModel.recipe_id)
+                )
+                
+                stock_results = db.exec(stock_sql).all()
+                stock_match_dict = {r_id: match for r_id, match in stock_results if match is not None}
+
         scores = []
-        for recipe_id, vec in recipe_vectors.items():
-            score = cosine_similarity([user_vector], [vec])[0][0]
-            scores.append((recipe_id, score))
+        for i, recipe_id in enumerate(recipe_ids):
+            content_score = sim_scores[i]
+            stock_match_percent = stock_match_dict.get(recipe_id, 0.0)
+            stock_score = float(stock_match_percent) / 100.0
+            hybrid_score = (content_score * 0.7) + (stock_score * 0.3)
+            scores.append((recipe_id, hybrid_score, content_score, stock_score))
 
         scores.sort(key=lambda x: x[1], reverse=True)
 
-        print(f"\n=== คะแนนความคล้าย (User ID: {user_id}) ===")
-        for r_id, s in scores[:15]:
-            print(f"Recipe ID: {r_id:2} | Score: {s:.4f}")
-        print("==========================================\n")
+        print(f"\n=== Hybrid Recommendation (User ID: {user_id}) ===")
+        for r_id, h_score, a_score, s_score in scores[:15]:
+            print(f"Recipe: {r_id:2} | Final: {h_score:.3f} (AI: {a_score:.3f}, Stock: {s_score:.3f})")
+        print("==================================================\n")
 
-        top_ids = [recipe_id for recipe_id, _ in scores[:15]]
+        top_ids = [s[0] for s in scores[:15]]
 
         if not top_ids:
             return []
@@ -391,6 +448,9 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
         recipe_dict = {recipe.recipe_id: (recipe, like_count, is_liked) for recipe, like_count, is_liked in recipes}
         sorted_recipes = [recipe_dict[recipe_id] for recipe_id in top_ids if recipe_id in recipe_dict]
         
+        t1_end = time.perf_counter()
+        print(f"t1: {t1_end - t1_start}")
+
         return [ RecipeResponseDTO.model_validate(
             recipe, from_attributes=True
         ).model_copy(

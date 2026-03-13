@@ -33,15 +33,17 @@ def run():
 
             has_change = False
 
+            idf_list = vectorizer.idf_.tolist()
             vocab_record = db.get(SysModelVocabularyModel, "recipe_vocab")
 
             if not vocab_record:
-                vocab_record = SysModelVocabularyModel(name="recipe_vocab", vocabulary=vectorizer.vocabulary_)
+                vocab_record = SysModelVocabularyModel(name="recipe_vocab", vocabulary=vectorizer.vocabulary_, idf=idf_list)
                 db.add(vocab_record)
                 has_change = True
             else:
-                if vocab_record.vocabulary != vectorizer.vocabulary_:
+                if vocab_record.vocabulary != vectorizer.vocabulary_ or vocab_record.idf != idf_list:
                     vocab_record.vocabulary = vectorizer.vocabulary_
+                    vocab_record.idf = idf_list
                     has_change = True
                     print("Debug: Vocabulary has changed!")
 

@@ -17,6 +17,7 @@ class SysModelVocabularyModel(SQLModel, table=True):
     __tablename__ = "sys_model_vocabulary"
     name: str = Field(primary_key=True)
     vocabulary: dict = Field(sa_column=Column(JSONB))
+    idf: list = Field(sa_column=Column(JSONB))
 
 class SysCacheVersionModel(SQLModel, table=True):
     __tablename__ = "sys_cache_version"

@@ -2,6 +2,9 @@ from sqlmodel import Session, select, delete, func, desc, or_, distinct
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import json
+import scipy.sparse as sp
+from sklearn.feature_extraction.text import TfidfVectorizer
 from app.core import cloudinary, datetimezone
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.recipeModel import (
@@ -9,11 +12,13 @@ from app.models.recipeModel import (
     MasTagModel, MapRecipeTagModel
 )
 from app.models.userStockModel import TrnUserStockModel
+from app.models.systemModel import SysModelVocabularyModel, MapRecipeVectorModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO, 
     RecipeHeaderResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO
 )
 from app.services import vectorStoreService
+from app.scripts.build_recipe_vectors import thai_tokenizer
 import time
 
 def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: int):
@@ -504,13 +509,66 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
 def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Session):
     if not recipe_name:
         return []
+    
+    vocab_record = db.get(SysModelVocabularyModel, "recipe_vocab")
+    if not vocab_record or not vocab_record.idf:
+        print("ไม่พบ Vocabulary หรือ IDF ในระบบ กรุณารัน Cronjob ก่อน")
+        return []
+    
+    vocab_dict = vocab_record.vocabulary if isinstance(vocab_record.vocabulary, dict) else json.loads(vocab_record.vocabulary)
+    idf_list = vocab_record.idf if isinstance(vocab_record.idf, list) else json.loads(vocab_record.idf)
+
+    idf_array = np.array(idf_list, dtype=np.float64)
+
+    search_vectorizer = TfidfVectorizer(
+        tokenizer=thai_tokenizer,
+        token_pattern=None,
+        lowercase=False,
+        vocabulary=vocab_dict
+    )
+
+    search_vectorizer.idf_ = idf_array
+    search_vectorizer._tfidf._idf_diag = sp.diags(idf_array)
+
+    search_query = " ".join(recipe_name)
+
+    search_vector = search_vectorizer.transform([search_query]).toarray()
+    search_vector = np.array(search_vector, dtype=np.float32)
+
+    recipe_records = db.exec(select(MapRecipeVectorModel)).all()
+    if not recipe_records:
+        return []
+    
+    recipe_ids = []
+    recipe_matrix = []
+
+    for r in recipe_records:
+        recipe_ids.append(r.recipe_id)
+        vec = json.loads(r.vector_data) if isinstance(r.vector_data, str) else r.vector_data
+        recipe_matrix.append(vec)
+            
+    recipe_matrix = np.array(recipe_matrix, dtype=np.float32)
+    sim_scores = cosine_similarity(search_vector, recipe_matrix)[0]
+
+    scored_recipes = [(recipe_ids[i], sim_scores[i]) for i in range(len(recipe_ids))]
+    scored_recipes.sort(key=lambda x: x[1], reverse=True)
+
+    print(f"\n[Vector Search] ผลลัพธ์การจับคู่กับรูปภาพ:")
+    for r_id, score in scored_recipes[:10]:
+        print(f"Recipe ID: {r_id:2} | ความแม่นยำ: {score:.4f}")
+
+    MIN_SCORE_THRESHOLD = 0.4 
+    top_recipe_ids = [r_id for r_id, score in scored_recipes[:10] if score >= MIN_SCORE_THRESHOLD]
+    if not top_recipe_ids:
+        print("AI เดาชื่อมา แต่หาใน DB ไม่เจอสิ่งที่คล้ายกันเลย")
+        return []
 
     visibility_condition = or_(
         TrnRecipeModel.is_public == True,
         TrnRecipeModel.user_id == user_id
     )
 
-    name_condition = or_(*[TrnRecipeModel.recipe_name.contains(name) for name in recipe_name])
+    # name_condition = or_(*[TrnRecipeModel.recipe_name.contains(name) for name in recipe_name])
 
     query = select(
         TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
@@ -519,7 +577,8 @@ def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Sessi
         MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
     ).where(
         TrnRecipeModel.is_active == True,
-        name_condition, 
+        # name_condition, 
+        TrnRecipeModel.recipe_id.in_(top_recipe_ids),
         visibility_condition
     ).group_by(
         TrnRecipeModel.recipe_id
@@ -527,12 +586,16 @@ def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Sessi
         selectinload(TrnRecipeModel.user),
         selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
     )
+
     result = db.exec(query).all()
+    recipe_dict = {recipe.recipe_id: (recipe, like_count) for recipe, like_count in result}
+    sorted_recipes = [recipe_dict[r_id] for r_id in top_recipe_ids if r_id in recipe_dict]
+
     return [ RecipeResponseDTO.model_validate(
         recipe, from_attributes=True
     ).model_copy(
         update={"like_count": like_count}
-    ) for recipe, like_count in result]
+    ) for recipe, like_count in sorted_recipes]
 
 def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | None = None):
     recipe = db.exec(

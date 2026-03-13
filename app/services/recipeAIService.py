@@ -68,7 +68,7 @@ food_schema = {
         },
         "predictions": {
             "type": "ARRAY",
-            "description": "รายชื่ออาหารที่คาดเดา 3 อันดับแรก (ถ้ารูปนี้ไม่ใช่อาหาร ให้ตอบเป็น Array ว่าง [])",
+            "description": "รายชื่ออาหารที่คาดเดา 5 อันดับแรก (ถ้ารูปนี้ไม่ใช่อาหาร ให้ตอบเป็น Array ว่าง [])",
             "items": {
                 "type": "OBJECT",
                 "properties": {
@@ -138,7 +138,7 @@ def scan_food_image(image_bytes: bytes):
     # )
     response = client.models.generate_content(
         model=GOOGLE_ANALIZE_IMG_MODEL,
-        contents=[img, "รูปนี้ใช่อาหารหรือไม่? ถ้าใช่ให้บอกชื่ออาหารที่น่าจะเป็นไปได้ 3 อันดับแรก ถ้าไม่ใช่ให้ตอบว่าไม่ใช่"],
+        contents=[img, "รูปนี้ใช่อาหารหรือไม่? ถ้าใช่ให้บอกชื่ออาหารที่น่าจะเป็นไปได้ 5 อันดับแรก ถ้าไม่ใช่ให้ตอบว่าไม่ใช่"],
         config=types.GenerateContentConfig(
             system_instruction="คุณคือผู้เชี่ยวชาญด้านอาหาร วิเคราะห์รูปภาพและตอบกลับในรูปแบบ JSON. หากเป็นอาหารให้ระบุ is_food เป็น true พร้อมรายชื่อ หากไม่ใช่ให้ระบุ is_food เป็น false และไม่ต้องใส่รายชื่ออาหาร",
             response_mime_type="application/json",

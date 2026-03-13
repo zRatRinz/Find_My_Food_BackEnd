@@ -70,7 +70,7 @@ def update_shopping_item_status_by_shopping_list_id(item_id: int,
             status_code=401,
             detail="ต้อง login หรือเป็น guest ก่อน"
         )
-    response, message = shoppingCartService.update_shopping_item_status_by_shopping_item_id(db, item_id, request_body, user_id, guest_token)
+    response = shoppingCartService.update_shopping_item_status_by_shopping_item_id(db, item_id, request_body, user_id, guest_token)
     return StandardResponse.success(data=response)
 
     
@@ -86,7 +86,7 @@ def update_shopping_item_quantity_by_item_id(item_id: int,
             status_code=401,
             detail="ต้อง login หรือเป็น guest ก่อน"
         )
-    response, message = shoppingCartService.update_shopping_item_quantity_by_item_id(db, item_id, request_body, user_id, guest_token)
+    response = shoppingCartService.update_shopping_item_quantity_by_item_id(db, item_id, request_body, user_id, guest_token)
     return StandardResponse.success(data=response)
 
 
@@ -102,7 +102,7 @@ def update_shopping_item_unit_by_item_id(item_id: int,
             status_code=401,
             detail="ต้อง login หรือเป็น guest ก่อน"
         )
-    response, message = shoppingCartService.update_shopping_item_unit_by_item_id(db, item_id, request_body, user_id, guest_token)
+    response = shoppingCartService.update_shopping_item_unit_by_item_id(db, item_id, request_body, user_id, guest_token)
     return StandardResponse.success(data=response)
     
 @router.delete("/deleteShoppingList/{list_id}")
@@ -116,7 +116,7 @@ def delete_shopping_list(list_id: int,
             status_code=401,
             detail="ต้อง login หรือเป็น guest ก่อน"
         )
-    response, message = shoppingCartService.delete_shopping_list_by_shopping_list_id(db, list_id, user_id, guest_token)
+    response = shoppingCartService.delete_shopping_list_by_shopping_list_id(db, list_id, user_id, guest_token)
     return StandardResponse.success()
 
 

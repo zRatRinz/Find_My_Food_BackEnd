@@ -555,6 +555,7 @@ def get_recipe_by_ai_ingredient_name(user_id: int, ingredient_name: list[str], d
         MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id
     ).where(
         TrnRecipeModel.is_active == True,
+        DtlRecipeIngredientModel.is_main_ingredient == True,
         ingredient_condition, 
         visibility_condition
     ).group_by(
@@ -708,6 +709,8 @@ def get_search_recipe_filter_option(user_id: int | None, categories: list[int], 
             MapRecipeTagModel.recipe_id == TrnRecipeModel.recipe_id
         ).where(
             MapRecipeTagModel.tag_id.in_(filter_options)
+        ).having(
+            func.count(func.distinct(MapRecipeTagModel.tag_id)) == len(filter_options)
         )
     
     result = db.exec(query).all()

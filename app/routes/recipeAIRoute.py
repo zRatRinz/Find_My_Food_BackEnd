@@ -4,9 +4,9 @@ from sqlmodel import Session
 from app.dependencies import get_current_active_user
 from app.db import database
 from app.models.userModel import MasUserModel
-from app.schemas.recipeDTO import RecipeResponseDTO, RecipePromptContentDTO
+from app.schemas.recipeDTO import RecipeResponseDTO, RecipePromptContentDTO, ScanIngredientResponseDTO
 from app.schemas.response import StandardResponse
-from app.services import recipeAIService 
+from app.services import recipeAIService
 
 router = APIRouter(prefix="/recipeAI", tags=["recipeAI"])
 
@@ -24,7 +24,7 @@ async def generate_recipe_image(current_user: Annotated[MasUserModel, Depends(ge
     response = recipeAIService.generate_recipe_image(request_body.recipe_name, request_body.ingredients)
     return StandardResponse.success(data=response)
 
-@router.post("/analyzeIngredientImage", response_model=StandardResponse[list[RecipeResponseDTO]])
+@router.post("/analyzeIngredientImage", response_model=StandardResponse[ScanIngredientResponseDTO])
 async def analyze_ingredient_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
                                    file: UploadFile = File(...),
                                    db: Session = Depends(database.get_db)):

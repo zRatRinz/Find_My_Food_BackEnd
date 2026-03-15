@@ -1,4 +1,4 @@
-from sqlmodel import Session, select, delete, func, desc, or_, distinct
+from sqlmodel import Session, select, delete, func, desc, or_, distinct, intersect
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -469,6 +469,10 @@ def get_recommend_recipe_for_you(db: Session, user_id: int):
 
 def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
     try:
+        ingredients_list = [ing.strip() for ing in recipe_name.split(",") if ing.strip()]
+        if not ingredients_list:
+            return []
+
         if user_id:
             visibility_condition = or_(
                 TrnRecipeModel.is_public == True,
@@ -477,6 +481,17 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
 
         else:
             visibility_condition = TrnRecipeModel.is_public == True
+
+        subqueries = []
+        for ing in ingredients_list:
+            sq = (
+                select(DtlRecipeIngredientModel.recipe_id)
+                .join(MasIngredientModel, MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id)
+                .where(MasIngredientModel.ingredient_name.contains(ing))
+            )
+            subqueries.append(sq)
+        
+        ingredient_subquery = intersect(*subqueries)
 
         query = select(
             TrnRecipeModel,
@@ -487,8 +502,12 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
                 MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
             ).where(
                 TrnRecipeModel.is_active == True,
-                TrnRecipeModel.recipe_name.contains(recipe_name), 
-                visibility_condition
+                # TrnRecipeModel.recipe_name.contains(recipe_name), 
+                visibility_condition,
+                or_(
+                    TrnRecipeModel.recipe_name.contains(recipe_name), 
+                    TrnRecipeModel.recipe_id.in_(ingredient_subquery)
+                )
             ).group_by(
                 TrnRecipeModel.recipe_id
             ).options(
@@ -530,7 +549,11 @@ def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Sessi
     search_vectorizer.idf_ = idf_array
     search_vectorizer._tfidf._idf_diag = sp.diags(idf_array)
 
-    search_query = " ".join(recipe_name)
+    raw_query = " ".join(recipe_name)
+    tokens = thai_tokenizer(raw_query)
+    unique_tokens = list(dict.fromkeys(tokens))
+    search_query = " ".join(unique_tokens)
+    # search_query = " ".join(recipe_name)
 
     search_vector = search_vectorizer.transform([search_query]).toarray()
     search_vector = np.array(search_vector, dtype=np.float32)
@@ -666,7 +689,7 @@ def get_recipe_by_ai_ingredient_name(user_id: int, ingredient_name: list[str], d
     like_count_col = func.count(distinct(MapRecipeLikeModel.user_id)).label("like_count")
     
     query = select(
-        TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+        TrnRecipeModel, like_count_col
     ).outerjoin(
         MapRecipeLikeModel,
         MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
@@ -842,3 +865,52 @@ def get_search_recipe_filter_option(user_id: int | None, categories: list[int], 
     ).model_copy(
         update={"like_count": like_count, "is_liked": is_liked > 0}
     ) for recipe, like_count, is_liked in result]
+
+def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str], db: Session):
+    if not ingredient_list:
+        return []
+    
+    if user_id:
+        visibility_condition = or_(
+            TrnRecipeModel.is_public == True,
+            TrnRecipeModel.user_id == user_id
+        )
+
+    else:
+        visibility_condition = TrnRecipeModel.is_public == True
+
+    ingredient_condition = or_(*[MasIngredientModel.ingredient_name.contains(name) for name in ingredient_list])
+    match_count = func.count(distinct(MasIngredientModel.ingredient_id)).label("match_count")
+    like_count_col = func.count(distinct(MapRecipeLikeModel.user_id)).label("like_count")
+    
+    query = select(
+        TrnRecipeModel, like_count_col
+    ).outerjoin(
+        MapRecipeLikeModel,
+        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+    ).join(
+        DtlRecipeIngredientModel, 
+        DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id
+    ).join(
+        MasIngredientModel, 
+        MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id
+    ).where(
+        TrnRecipeModel.is_active == True,
+        DtlRecipeIngredientModel.is_main_ingredient == True,
+        ingredient_condition, 
+        visibility_condition
+    ).group_by(
+        TrnRecipeModel.recipe_id
+    ).order_by(
+        match_count.desc(),
+        like_count_col.desc()
+    ).options(
+        selectinload(TrnRecipeModel.user),
+        selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
+    )
+    result = db.exec(query).all()
+    return [ RecipeResponseDTO.model_validate(
+        recipe, from_attributes=True
+    ).model_copy(
+        update={"like_count": like_count}
+    ) for recipe, like_count in result]

@@ -128,3 +128,7 @@ class CategoryResponseDTO(BaseModel):
 class RecipeFilterOptionResponseDTO(BaseModel):
     categories: list[CategoryResponseDTO]
     tags: list[TagResponseDTO]
+
+class ScanIngredientResponseDTO(BaseModel):
+    ingredients: list[str]
+    recipes : list[RecipeResponseDTO]

@@ -99,7 +99,7 @@ def check_item_expire_date(db: Session):
     date_now = datetimezone.get_thai_now().date()
     expire_result = db.exec(
         select(MasUserModel.user_id, MasUserModel.username, MasUserModel.fcm_token)
-        .join(TrnUserStockModel)
+        .join(TrnUserStockModel, MasUserModel.user_id == TrnUserStockModel.user_id)
         .where(
             TrnUserStockModel.expire_date < date_now + timedelta(days=1),
             MasUserModel.fcm_token != None    

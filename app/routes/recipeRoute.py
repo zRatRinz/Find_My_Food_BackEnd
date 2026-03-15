@@ -126,3 +126,11 @@ def get_search_recipe_filter_option(categories: list[int] = Query(default=[]),
     user_id = current_user.user_id if current_user else None
     response = recipeService.get_search_recipe_filter_option(user_id, categories, tags, db)
     return StandardResponse.success(data=response)
+
+@router.get("/getRecipeFromIngredient")
+def get_recipe_by_ingredient_name(ingredient_list: list[str] = Query(default=[]),
+    current_user: MasUserModel | None = Depends(get_current_user_optional), 
+                               db: Session = Depends(database.get_db)):
+    user_id = current_user.user_id if current_user else None
+    response = recipeService.get_recipe_by_ingredient_name(user_id, ingredient_list,db)
+    return StandardResponse.success(data=response)

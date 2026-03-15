@@ -10,6 +10,7 @@ import base64
 from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL
 from app.core.exceptions import NotFoundException
 from app.enums.errorCodeEnum import ErrorCodeEnum
+from app.schemas.recipeDTO import ScanIngredientResponseDTO
 from app.services import recipeService
 
 import time
@@ -306,90 +307,10 @@ def analize_ingredient_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"DB ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
 
         print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
-        return recipe_result
+        return ScanIngredientResponseDTO(
+            ingredients=ai_result["ingredients"],
+            recipes=recipe_result
+        )
     except Exception as ex:
         print(f"error: {ex}")
         raise
-# def generate_recipe_image(recipe_name: str, ingredients: list[str]):
-#     try:
-#         total_time = time.perf_counter()
-#         ingredients_str = ", ".join(ingredients)
-#         prompt_text = (
-#             f"Professional and appetizing food photography of a Thai dish called '{recipe_name}'. "
-#             f"This dish highlights the following key ingredients: {ingredients_str}. "
-#             f"Focus on the final cooked dish with clear visibility of the solid ingredients like meat and herbs. "
-#             f"Do NOT show any raw seasoning powders, salt, sugar, or sauce bottles. "
-#             f"Soft natural window light, cozy homemade food style, appetizing, realistic and approachable."
-#         )
-
-#         print(f"กำลังสั่ง Imagen 4 วาดรูป: {prompt_text}")
-#         t_start = time.perf_counter()
-#         response = client.models.generate_images(
-#             model=GOOGLE_IMG_GEN_MODEL,
-#             prompt=prompt_text,
-#             config={
-#                 "number_of_images": 1,
-#                 "aspect_ratio": "1:1"
-#             }
-#         )
-#         t_end = time.perf_counter()
-#         print(f"Imagen 4 ใช้เวลา: {t_end - t_start:.2f} วินาที")
-
-#         if response.generated_images:
-#             image_bytes = response.generated_images[0].image.image_bytes
-#             img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-#             buffered = io.BytesIO()
-#             img.save(buffered, format="JPEG", quality=85, optimize=True)
-
-#             img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-            
-#             print("สร้างรูปและแปลงเป็น Base64 สำเร็จ!")
-#             print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
-#             return {
-#                 "recipe_name": recipe_name,
-#                 "image_base64": img_base64
-#             }, None
-
-#         else:
-#             print("ไม่สามารถสร้างรูปและแปลงเป็น Base64 ได้!")
-#             print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
-#             return None, ErrorCodeEnum.INTERNAL_ERROR
-
-#     except Exception as ex:
-#         print(f"error: {ex}")
-#         return None, ErrorCodeEnum.INTERNAL_ERROR
-
-# def predict_food_image(image_bytes: bytes):
-#     try:
-#         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-#         image = image.resize((224, 224))
-#         image_array = np.array(image).astype("float32")
-#         image_batch = np.expand_dims(image_array, axis=0)
-#         predictions = model.predict(image_batch)
-#         scores = predictions[0]
-
-#         # class_index = int(np.argmax(scores))
-#         # confidence = float(scores[class_index])
-#         # return {
-#         #     "class_index": class_index,
-#         #     "class_name": CLASS_MAP.get(class_index, "Unknown"),
-#         #     "confidence": round(confidence, 4)
-#         # }
-
-#         top_indices = scores.argsort()[::-1][:3]
-
-#         top_3 = [
-#             {
-#                 "class_name": CLASS_MAP.get(i, "Unknown"),
-#                 "confidence": round(float(scores[i]), 4)
-#             }
-#             for i in top_indices
-#         ]
-
-#         return {
-#             "top_3": top_3
-#         }
-
-#     except Exception as ex:
-#         raise Exception(f"Error: {str(ex)}")

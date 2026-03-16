@@ -43,13 +43,11 @@ def like_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active
 def unlike_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, db:Session = Depends(database.get_db)):
     response = recipeService.unlike_recipe(db, current_user.user_id, recipe_id)
     return StandardResponse.success(response)
-
     
 @router.put("/updateRecipeHeaderById/{recipe_id}")
 def update_recipe_header_by_recipe_id(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, request_body: UpdateRecipeHeaderDTO, db:Session = Depends(database.get_db)):
     response = recipeService.update_recipe_header_by_recipe_id(db, current_user.user_id, recipe_id, request_body)
     return StandardResponse.success()
-
     
 @router.put("/updateRecipeIngredientById/{recipe_id}")
 def update_recipe_ingredient_by_recipe_id(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, request_body: UpdateRecipeIngredientListDTO, db:Session = Depends(database.get_db)):
@@ -60,6 +58,11 @@ def update_recipe_ingredient_by_recipe_id(current_user: Annotated[MasUserModel, 
 def update_recipe_step_by_recipe_id(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, request_body: UpdateRecipeStepListDTO, db:Session = Depends(database.get_db)):
     response = recipeService.update_recipe_step_by_recipe_id(db, current_user.user_id, recipe_id, request_body)
     return StandardResponse.success(data=response)
+
+@router.patch("/deleteMyRecipeByRecipeId/{recipe_id}")
+def delete_my_recipe_by_recipe_id(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe_id:int, db:Session = Depends(database.get_db)):
+    response = recipeService.delete_my_recipe_by_recipe_id(current_user.user_id, recipe_id, db)
+    return StandardResponse.success()
     
 @router.get("/getAllRecipe", response_model=StandardResponse[list[RecipeResponseDTO]])
 def get_all_recipe(current_user: MasUserModel | None = Depends(get_current_user_optional), db:Session = Depends(database.get_db)):

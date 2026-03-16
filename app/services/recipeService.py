@@ -255,6 +255,26 @@ def unlike_recipe(db: Session, user_id: int, recipe_id: int):
         print(f"error: {ex}")
         raise
 
+def delete_my_recipe_by_recipe_id(user_id: int, recipe_id: int, db: Session):
+    recipe = db.get(TrnRecipeModel, recipe_id)
+    if not recipe:
+        print(f"Error: Recipe ID {recipe_id} not found.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+        
+    if recipe.user_id != user_id:
+        print(f"Error: Not authorized to delete recipe with ID {recipe_id}.")
+        raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
+        
+    try:
+        recipe.is_active = False
+        recipe.update_date = datetimezone.get_thai_now()
+        db.commit()
+        return True
+    except Exception as ex:
+        db.rollback()
+        print(f"error: {ex}")
+        raise
+
 def get_all_recipe(user_id: int | None, db: Session):
     if user_id:
         visibility_condition = or_(
@@ -723,7 +743,7 @@ def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | N
         raise
 
 def get_my_create_recipe(db: Session, user_id: int):
-    sql = select(TrnRecipeModel).where(TrnRecipeModel.user_id == user_id).options(
+    sql = select(TrnRecipeModel).where(TrnRecipeModel.user_id == user_id, TrnRecipeModel.is_active == True).options(
         selectinload(TrnRecipeModel.user),
         selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
     )

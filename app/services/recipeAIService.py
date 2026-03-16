@@ -16,7 +16,7 @@ from app.services import recipeService
 import time
 
 print("📦 กำลังโหลดโมเดล TF Lite...")
-interpreter = tflite.Interpreter(model_path="app/ai/model_11class.tflite")
+interpreter = tflite.Interpreter(model_path="app/ai/model_11class_new.tflite")
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
@@ -24,9 +24,9 @@ output_details = interpreter.get_output_details()
 
 # CLASS_NAMES = ["food", "non_food"]
 CLASS_NAMES = [
-    'ข้าวมันไก่', 'ข้าวผัด', 'ข้าวซอย',
-    'มัสมั่น', 'ผัดกะเพรา', 'ผัดไท',
-    'ข้าวหมูแดง', 'ข้าวไข่เจียว', 'ส้มตำ',
+    'ข้าวผัด', 'ผัดกะเพรา', 'ผัดไท',
+    'ผัดผงกะหรี่', 'ผัดซีอิ๊ว', 'ข้าวไข่เจียว',
+    'ส้มตำ', 'สุกี้', 'ทอดกระเทียม',
     'ต้มยำ', 'non_food'
 ]
 

@@ -16,13 +16,19 @@ from app.services import recipeService
 import time
 
 print("📦 กำลังโหลดโมเดล TF Lite...")
-interpreter = tflite.Interpreter(model_path="app/ai/model.tflite")
+interpreter = tflite.Interpreter(model_path="app/ai/model_11class.tflite")
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-CLASS_NAMES = ["food", "non_food"]
+# CLASS_NAMES = ["food", "non_food"]
+CLASS_NAMES = [
+    'ข้าวมันไก่', 'ข้าวผัด', 'ข้าวซอย',
+    'มัสมั่น', 'ผัดกะเพรา', 'ผัดไท',
+    'ข้าวหมูแดง', 'ข้าวไข่เจียว', 'ส้มตำ',
+    'ต้มยำ', 'non_food'
+]
 
 dummy_input = np.zeros(input_details[0]['shape'], dtype=np.float32)
 interpreter.set_tensor(input_details[0]['index'], dummy_input)
@@ -118,7 +124,7 @@ def predict_food_image(image_bytes: bytes):
     confidence = scores[predicted_index]
     result_class = CLASS_NAMES[predicted_index]
 
-    is_food = (result_class == "food")
+    is_food = (result_class != "non_food")
         
     return {
         "is_food": is_food,
@@ -183,7 +189,7 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"AI คาดเดาว่าเป็น: {predicted_names}")
 
         t3_start = time.perf_counter()
-        recipe_result = recipeService.get_recipe_by_ai_recipe_name(user_id, predicted_names, db)
+        recipe_result = recipeService.get_recipe_by_ai_recipe_name(user_id, prediction_result["class_name"], predicted_names, db)
         t3_end = time.perf_counter()
         print(f"DB ใช้เวลา: {t3_end - t3_start:.2f} วินาที")
 

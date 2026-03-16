@@ -525,7 +525,7 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
         print(f"error: {ex}")
         raise
 
-def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Session):
+def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name: list[str], db: Session):
     if not recipe_name:
         return []
     
@@ -573,7 +573,39 @@ def get_recipe_by_ai_recipe_name(user_id: int, recipe_name: list[str], db: Sessi
     recipe_matrix = np.array(recipe_matrix, dtype=np.float32)
     sim_scores = cosine_similarity(search_vector, recipe_matrix)[0]
 
-    scored_recipes = [(recipe_ids[i], sim_scores[i]) for i in range(len(recipe_ids))]
+    is_agreed_by_gemini = False
+    if mobilenet_class and mobilenet_class != "non_food":
+        for g_name in recipe_name:
+            if mobilenet_class in g_name:
+                is_agreed_by_gemini = True
+                break
+    
+    if not is_agreed_by_gemini and mobilenet_class != "non_food":
+        print(f"[Warning] MobileNet ทายว่า '{mobilenet_class}' แต่ Gemini ไม่เห็นด้วยเลย")
+
+    recipe_details = db.exec(
+        select(TrnRecipeModel.recipe_id, TrnRecipeModel.recipe_name)
+        .where(TrnRecipeModel.recipe_id.in_(recipe_ids))
+    ).all()
+    recipe_name_map = {r.recipe_id: r.recipe_name for r in recipe_details}
+
+    scored_recipes = []
+    BONUS_SCORE = 0.15
+
+    for i in range(len(recipe_ids)):
+        r_id = recipe_ids[i]
+        base_score = sim_scores[i]
+        db_recipe_name = recipe_name_map.get(r_id, "")
+
+        final_score = base_score
+
+        if is_agreed_by_gemini:
+            if mobilenet_class in db_recipe_name: 
+                final_score += BONUS_SCORE
+
+        scored_recipes.append((r_id, final_score))
+
+    # scored_recipes = [(recipe_ids[i], sim_scores[i]) for i in range(len(recipe_ids))]
     scored_recipes.sort(key=lambda x: x[1], reverse=True)
 
     print(f"\n[Vector Search] ผลลัพธ์การจับคู่กับรูปภาพ:")

@@ -97,11 +97,12 @@ def get_item_expire_date(db: Session, storage_location: StorageTypeEnum, item_id
 
 def check_item_expire_date(db: Session):
     date_now = datetimezone.get_thai_now().date()
+    target_date = date_now + timedelta(days=1)
     expire_result = db.exec(
         select(MasUserModel.user_id, MasUserModel.username, MasUserModel.fcm_token)
         .join(TrnUserStockModel, MasUserModel.user_id == TrnUserStockModel.user_id)
         .where(
-            TrnUserStockModel.expire_date < date_now + timedelta(days=1),
+            TrnUserStockModel.expire_date <= target_date,
             MasUserModel.fcm_token != None    
         ).distinct()
     ).all()

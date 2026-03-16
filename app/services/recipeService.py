@@ -77,19 +77,19 @@ def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: in
         raise
 
 def update_recipe_image(recipe_id: int, image_url: str, db: Session):
-    try:
-        response = cloudinary.move_temp_image_to_food_folder(recipe_id, image_url)
-        if response:
-            image_url = response
-    except Exception as cloudinary_ex:
-        print(f"Cloudinary Move Failed: {cloudinary_ex}")
-        raise cloudinary_ex
+    if "food-img/" not in image_url:
+        try:
+            response = cloudinary.move_temp_image_to_food_folder(recipe_id, image_url)
+            if response:
+                image_url = response
+        except Exception as cloudinary_ex:
+            print(f"Cloudinary Move Failed: {cloudinary_ex}")
+            raise cloudinary_ex
     
     try:
-        if not response:
-            raise
-
         recipe = db.get(TrnRecipeModel, recipe_id)
+        if recipe.image_url == image_url:
+            return True
         recipe.image_url = image_url
         recipe.update_date = datetimezone.get_thai_now()
         db.commit()

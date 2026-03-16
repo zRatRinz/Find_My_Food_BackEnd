@@ -7,7 +7,8 @@ from app.dependencies import get_current_active_user, get_current_user_optional
 from app.models.userModel import MasUserModel
 from app.schemas.recipeDTO import (
     CreateNewRecipeDTO, UpdateRecipeHeaderDTO, UpdateRecipeIngredientListDTO, UpdateRecipeStepListDTO, RecipeResponseDTO,
-    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO, RecipeFilterOptionResponseDTO, TagResponseDTO
+    RecipeDetailResponseDTO, IngredientResponseDTO, CategoryResponseDTO, RecipeFilterOptionResponseDTO, TagResponseDTO,
+    UpdateRecipeImageDTO
 )
 from app.schemas.response import StandardResponse
 from app.services import recipeService
@@ -17,6 +18,19 @@ router = APIRouter(prefix="/recipe", tags=["recipe"])
 @router.post("/uploadNewRecipeImage")
 async def upload_new_recipe_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], file: UploadFile = File(...)):
     response = cloudinary.upload_temp_image_to_cloudinary(file)
+    if not response:
+        return StandardResponse.fail(message="อัพโหลดรูปภาพไม่สําเร็จ")
+    return StandardResponse.success(data=response)
+
+@router.post("/updateRecipeImage")
+async def update_recipe_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe: UpdateRecipeImageDTO):
+    try:
+        response = cloudinary.move_temp_image_to_food_folder(recipe.recipe_id, recipe.image_url)
+        if response:
+            recipe.image_url = response
+    except Exception as cloudinary_ex:
+        print(f"Cloudinary Move Failed: {cloudinary_ex}")
+        raise cloudinary_ex
     if not response:
         return StandardResponse.fail(message="อัพโหลดรูปภาพไม่สําเร็จ")
     return StandardResponse.success(data=response)

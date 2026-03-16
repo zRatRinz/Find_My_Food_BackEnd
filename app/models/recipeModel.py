@@ -24,6 +24,7 @@ class MasIngredientModel(SQLModel, table=True):
     pantry_days: int | None = None
     fridge_days: int | None = None
     freezer_days: int | None = None
+    ingredient_group: str | None = None
 
 class TrnRecipeModel(SQLModel, table=True):
     __tablename__ = "trn_recipe"

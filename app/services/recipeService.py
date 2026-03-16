@@ -1,4 +1,4 @@
-from sqlmodel import Session, select, delete, func, desc, or_, distinct, intersect
+from sqlmodel import Session, select, delete, func, desc, or_, distinct, intersect, literal
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -510,7 +510,12 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
             sq = (
                 select(DtlRecipeIngredientModel.recipe_id)
                 .join(MasIngredientModel, MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id)
-                .where(MasIngredientModel.ingredient_name.contains(ing))
+                .where(
+                    or_(
+                        MasIngredientModel.ingredient_name.contains(ing),
+                        literal(ing).contains(MasIngredientModel.ingredient_group)
+                    )
+                )
             )
             subqueries.append(sq)
         
@@ -739,8 +744,17 @@ def get_recipe_by_ai_ingredient_name(user_id: int, ingredient_name: list[str], d
         TrnRecipeModel.user_id == user_id
     )
 
-    ingredient_condition = or_(*[MasIngredientModel.ingredient_name.contains(name) for name in ingredient_name])
-    match_count = func.count(distinct(MasIngredientModel.ingredient_id)).label("match_count")
+    ingredient_condition = or_(
+        *[
+            or_(
+                MasIngredientModel.ingredient_name.contains(name),
+                MasIngredientModel.ingredient_group.contains(name),
+                literal(name).contains(MasIngredientModel.ingredient_group)
+            )
+             for name in ingredient_name
+        ]
+    )
+    match_count = func.count(distinct(MasIngredientModel.ingredient_id))
     like_count_col = func.count(distinct(MapRecipeLikeModel.user_id)).label("like_count")
     
     query = select(
@@ -934,7 +948,16 @@ def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str
     else:
         visibility_condition = TrnRecipeModel.is_public == True
 
-    ingredient_condition = or_(*[MasIngredientModel.ingredient_name.contains(name) for name in ingredient_list])
+    ingredient_condition = or_(
+        *[
+            or_(
+                MasIngredientModel.ingredient_name.contains(name),
+                MasIngredientModel.ingredient_group.contains(name),
+                literal(name).contains(MasIngredientModel.ingredient_group)
+            )
+             for name in ingredient_list
+        ]
+    )
     match_count = func.count(distinct(MasIngredientModel.ingredient_id)).label("match_count")
     like_count_col = func.count(distinct(MapRecipeLikeModel.user_id)).label("like_count")
     

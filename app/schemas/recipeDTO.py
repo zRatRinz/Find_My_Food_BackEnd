@@ -140,4 +140,23 @@ class UpdateRecipeImageDTO(BaseModel):
 
 class AnalyzeFoodResponseDTO(BaseModel):
     is_food: bool
+    predicted_name: list[str] | None = None
     recipes: list[RecipeResponseDTO]
+
+class GenerateRecipeByAI(BaseModel):
+    recipe_name: str
+    prompt: str | None = None
+
+class GenerateRecipeByAIResponseDTO(BaseModel):
+    recipe_id: int
+    recipe_name: str
+    description: str | None = None
+    cooking_time_min: int | None = None
+    image_url: str | None = None
+    create_date: datetime | None = None
+    update_date: datetime | None = None
+    is_public: bool
+    is_active: bool
+    tags: list[str]
+
+    model_config = ConfigDict(from_attributes=True)

@@ -38,6 +38,7 @@ class TrnRecipeModel(SQLModel, table=True):
     is_active: bool = Field(default=True)
     create_date: datetime = Field(default_factory=datetimezone.get_thai_now)
     update_date: datetime | None = None
+    is_created_by_ai: bool = Field(default=False)
 
     user: "MasUserModel" = Relationship(back_populates="recipes")
     ingredients: list["DtlRecipeIngredientModel"] = Relationship(back_populates="recipe")

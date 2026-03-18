@@ -7,10 +7,11 @@ from google.genai import types
 import json
 from sqlmodel import Session, select
 import base64
-from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL
+from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL, GOOGLE_GEN_CONTENT_MODEL
 from app.core.exceptions import NotFoundException
 from app.enums.errorCodeEnum import ErrorCodeEnum
-from app.models.recipeModel import MasTagModel
+from app.models.recipeModel import MasTagModel, TrnRecipeModel, MasIngredientModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeTagModel
+from app.models.unitModel import UnitModel
 from app.schemas.recipeDTO import ScanIngredientResponseDTO, AnalyzeFoodResponseDTO
 from app.services import recipeService
 
@@ -35,13 +36,6 @@ dummy_input = np.zeros(input_details[0]['shape'], dtype=np.float32)
 interpreter.set_tensor(input_details[0]['index'], dummy_input)
 interpreter.invoke()
 print("วอร์มอัปโมเดล TF Lite พร้อมใช้งาน!")
-
-# model = tf.keras.models.load_model("app/ai/MNV2_Project_2.keras") 
-
-# print("กำลังวอร์มอัป MobileNetV2 (Cold Start)...")
-# dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
-# model.predict(dummy_input)
-# print("วอร์มอัปเสร็จสิ้น!")
 
 client = genai.Client(api_key=GOOGLE_AI_STUDIO_KEY)
 
@@ -105,6 +99,62 @@ ingredient_schema = {
         }
     },
     "required": ["has_ingredients","ingredients"]
+}
+
+recipe_list_schema = {
+    "type": "OBJECT",
+    "properties": {
+        "recipes": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "recipe_name": {"type": "STRING"},
+                    "description": {"type": "STRING"},
+                    "cooking_time_min": {"type": "INTEGER", "description": "เวลาทำอาหาร (นาที)"},
+                    "ingredients": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "ingredient_name": {"type": "STRING", "description": "ชื่อวัตถุดิบมาตรฐาน (ให้ตอบเฉพาะคำนามหลัก เช่น 'เนื้อหมู', 'กระเทียม' ห้ามใส่คำขยายเช่น 'สับละเอียด' หรือ 'หั่นเต๋า' เด็ดขาด)"},
+                                "quantity": {"type": "NUMBER", "description": "ปริมาณ"},
+                                "unit_id": {"type": "INTEGER", "description": "รหัสหน่วยตวง"},
+                                "is_main_ingredient": {"type": "BOOLEAN"},
+                                "ingredient_group": {
+                                    "type": "STRING", 
+                                    "nullable": True, 
+                                    "description": "ระบุเฉพาะประเภทของเนื้อสัตว์หลักเท่านั้น (เช่น 'เนื้อหมู', 'เนื้อไก่', 'เนื้อวัว', 'เนื้อปลา') หากวัตถุดิบนั้นไม่ใช่เนื้อสัตว์ประเภทดังกล่าว ให้ตอบเป็น null เด็ดขาด"
+                                },
+                                "pantry_days": {"type": "INTEGER", "description": "อายุเก็บรักษาอุณหภูมิห้อง (วัน) ถ้าเก็บไม่ได้ให้ใส่ 0"},
+                                "fridge_days": {"type": "INTEGER", "description": "อายุเก็บรักษาในตู้เย็นช่องธรรมดา (วัน)"},
+                                "freezer_days": {"type": "INTEGER", "description": "อายุเก็บรักษาในช่องแช่แข็ง (วัน)"}
+                            },
+                            "required": ["ingredient_name", "quantity", "unit_id", "is_main_ingredient"]
+                        }
+                    },
+                    "steps": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "step_no": {"type": "INTEGER"},
+                                "instruction": {"type": "STRING"}
+                            },
+                            "required": ["step_no", "instruction"]
+                        }
+                    },
+                    "tags": {
+                        "type": "ARRAY",
+                        "description": "เลือก tag_id ที่เกี่ยวข้องกับเมนูนี้จากรายการที่ให้ไป (เลือกได้หลายอัน)",
+                        "items": {"type": "INTEGER"}
+                    }
+                },
+                "required": ["recipe_name", "description", "cooking_time_min", "ingredients", "steps", "tags"]
+            }
+        }
+    },
+    "required": ["recipes"]
 }
 
 def predict_food_image(image_bytes: bytes):
@@ -202,6 +252,7 @@ def analyze_food_image(user_id: int, image_bytes: bytes, force_search: bool, db:
 
         return AnalyzeFoodResponseDTO(
             is_food=True,
+            predicted_name=predicted_names,
             recipes=recipe_result
         )
     except Exception as ex:
@@ -334,3 +385,122 @@ def analize_ingredient_image(user_id: int, image_bytes: bytes, db: Session):
     except Exception as ex:
         print(f"error: {ex}")
         raise
+
+def generate_new_recipe_by_ai_process(user_id: int, recipe_name: str, prompt: str | None, db: Session):
+    total_time = time.perf_counter()
+    units = db.exec(select(UnitModel)).all()
+    unit_options = ", ".join([f"{unit.unit_id}:{unit.unit_name}" for unit in units])
+
+    tags = db.exec(select(MasTagModel)).all()
+    tag_options = ", ".join([f"{tag.tag_id}:{tag.tag_name}" for tag in tags])
+
+    system_instruction = f"""คุณคือเชฟระดับโลก หน้าที่ของคุณคือสร้างสูตรอาหาร 1 สูตร
+    โดยหน่วยตวง (unit_id) ที่อนุญาตให้ใช้คือ: {unit_options}
+    รหัสแท็กหมวดหมู่ (tag_id) ที่อนุญาตให้ใช้: {tag_options}
+    (เลือก unit_id และ tag_id ที่เหมาะสมที่สุด)"""
+    
+    user_prompt = f"ขอสูตรอาหารสำหรับเมนู '{recipe_name}' เงื่อนไขเพิ่มเติม: '{prompt if prompt else 'ไม่มี'}'"
+    print("⏳ กำลังให้ AI คิดสูตรอาหาร...")
+    t1_start = time.perf_counter()
+    try:
+        response = client.models.generate_content(
+            model=GOOGLE_GEN_CONTENT_MODEL,
+            contents=[user_prompt],
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                response_schema=recipe_list_schema, # 🟢 บังคับโครงสร้างแบบ 100%
+                temperature=0.7,
+            ),
+        )
+        
+        response_dict = json.loads(response.text)
+        recipes_data = response_dict.get("recipes", [])
+        t1_end = time.perf_counter()
+        print(f"AI ใช้เวลา: {t1_end - t1_start:.2f} วินาที")
+        
+    except Exception as ex:
+        print(f"❌ Error calling Gemini API: {ex}")
+        raise Exception("AI ประมวลผลผิดพลาด กรุณาลองใหม่อีกครั้ง")
+    
+    generated_recipes = []
+
+    try:
+        for data in recipes_data:
+            new_recipe = TrnRecipeModel(
+                user_id=user_id,
+                recipe_name=data["recipe_name"],
+                description=data["description"],
+                cooking_time_min=data.get("cooking_time_min", 0),
+                is_created_by_ai=True,
+                is_public=False,
+                is_active=False,
+
+            )
+            db.add(new_recipe)
+            db.flush()
+
+            # 3.2 บันทึก Ingredients
+            for ing in data.get("ingredients", []):
+                ing_name = ing["ingredient_name"]
+                
+                # เช็คว่ามีวัตถุดิบนี้หรือยัง
+                db_ingredient = db.exec(
+                    select(MasIngredientModel).where(MasIngredientModel.ingredient_name == ing_name)
+                ).first()
+                
+                if db_ingredient:
+                    final_ingredient_id = db_ingredient.ingredient_id
+                else:
+                    new_mst_ing = MasIngredientModel(
+                        ingredient_name=ing_name,
+                        ingredient_group=ing.get("ingredient_group"), 
+                        pantry_days=ing.get("pantry_days"),
+                        fridge_days=ing.get("fridge_days"),
+                        freezer_days=ing.get("freezer_days")
+                    )
+                    db.add(new_mst_ing)
+                    db.flush() 
+                    final_ingredient_id = new_mst_ing.ingredient_id
+
+                new_ing = DtlRecipeIngredientModel(
+                    recipe_id=new_recipe.recipe_id,
+                    ingredient_id=final_ingredient_id,
+                    quantity=ing["quantity"],
+                    unit_id=ing["unit_id"],
+                    is_main_ingredient=ing.get("is_main_ingredient", False)
+                )
+                db.add(new_ing)
+
+            # 3.3 บันทึก Steps
+            for step in data.get("steps", []):
+                new_step = DtlRecipeStepModel(
+                    recipe_id=new_recipe.recipe_id,
+                    step_no=step["step_no"],
+                    instruction=step["instruction"]
+                )
+                db.add(new_step)
+
+            for tag_id in data.get("tags", []):
+                new_map_tag = MapRecipeTagModel(
+                    recipe_id=new_recipe.recipe_id,
+                    tag_id=tag_id
+                )
+                db.add(new_map_tag)
+
+            generated_recipes.append(new_recipe)
+
+        db.commit()
+
+    except Exception as ex:
+        db.rollback()
+        raise ex
+    
+    created_recipe_ids = [r.recipe_id for r in generated_recipes]
+    complete_recipes = db.exec(
+        select(TrnRecipeModel).where(TrnRecipeModel.recipe_id.in_(created_recipe_ids))
+    ).all()
+
+    print("✅ AI ประมวลผลสูตรอาหารเรียบร้อยแล้ว")
+    print(f"เวลาที่ใช้ทั้งหมด: {time.perf_counter() - total_time:.2f} วินาที")
+    return complete_recipes

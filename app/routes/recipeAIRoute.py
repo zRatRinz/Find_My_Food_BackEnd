@@ -4,7 +4,10 @@ from sqlmodel import Session
 from app.dependencies import get_current_active_user
 from app.db import database
 from app.models.userModel import MasUserModel
-from app.schemas.recipeDTO import RecipeResponseDTO, RecipePromptContentDTO, ScanIngredientResponseDTO, AnalyzeFoodResponseDTO
+from app.schemas.recipeDTO import (
+    RecipeResponseDTO, RecipePromptContentDTO, ScanIngredientResponseDTO, AnalyzeFoodResponseDTO, GenerateRecipeByAI,
+    GenerateRecipeByAIResponseDTO
+)
 from app.schemas.response import StandardResponse
 from app.services import recipeAIService
 
@@ -31,4 +34,11 @@ async def analyze_ingredient_image(current_user: Annotated[MasUserModel, Depends
                                    db: Session = Depends(database.get_db)):
     image_bytes = await file.read()
     response = recipeAIService.analize_ingredient_image(current_user.user_id, image_bytes, db)
+    return StandardResponse.success(data=response)
+
+@router.post("/generateNewRecipeByAI", response_model=StandardResponse[list[GenerateRecipeByAIResponseDTO]])
+async def generate_new_recipe_by_ai(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
+                                    request_body: GenerateRecipeByAI,
+                                    db: Session = Depends(database.get_db)):
+    response = recipeAIService.generate_new_recipe_by_ai_process(current_user.user_id, request_body.recipe_name, request_body.prompt, db)
     return StandardResponse.success(data=response)

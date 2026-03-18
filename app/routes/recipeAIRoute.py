@@ -1,21 +1,22 @@
-from fastapi import APIRouter, File, UploadFile, Depends
+from fastapi import APIRouter, File, UploadFile, Depends, Form
 from typing import Annotated
 from sqlmodel import Session
 from app.dependencies import get_current_active_user
 from app.db import database
 from app.models.userModel import MasUserModel
-from app.schemas.recipeDTO import RecipeResponseDTO, RecipePromptContentDTO, ScanIngredientResponseDTO
+from app.schemas.recipeDTO import RecipeResponseDTO, RecipePromptContentDTO, ScanIngredientResponseDTO, AnalyzeFoodResponseDTO
 from app.schemas.response import StandardResponse
 from app.services import recipeAIService
 
 router = APIRouter(prefix="/recipeAI", tags=["recipeAI"])
 
-@router.post("/analyzeFoodImage",response_model=StandardResponse[list[RecipeResponseDTO]])
+@router.post("/analyzeFoodImage",response_model=StandardResponse[AnalyzeFoodResponseDTO])
 async def analyze_food_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], 
                              file: UploadFile = File(...),
+                             force_search: bool = Form(False), 
                              db: Session = Depends(database.get_db)):
     image_bytes = await file.read()
-    response = recipeAIService.analyze_food_image(current_user.user_id, image_bytes, db)
+    response = recipeAIService.analyze_food_image(current_user.user_id, image_bytes, force_search, db)
     return StandardResponse.success(data=response)
 
 @router.post("/generateRecipeImage")

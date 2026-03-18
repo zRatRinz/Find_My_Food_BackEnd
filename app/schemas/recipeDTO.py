@@ -131,8 +131,13 @@ class RecipeFilterOptionResponseDTO(BaseModel):
 
 class ScanIngredientResponseDTO(BaseModel):
     ingredients: list[str]
+    tags: list[TagResponseDTO]
     recipes : list[RecipeResponseDTO]
 
 class UpdateRecipeImageDTO(BaseModel):
     recipe_id: int
     image_url: str
+
+class AnalyzeFoodResponseDTO(BaseModel):
+    is_food: bool
+    recipes: list[RecipeResponseDTO]

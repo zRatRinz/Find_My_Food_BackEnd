@@ -5,12 +5,13 @@ import io
 from google import genai
 from google.genai import types
 import json
-from sqlmodel import Session
+from sqlmodel import Session, select
 import base64
 from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL
 from app.core.exceptions import NotFoundException
 from app.enums.errorCodeEnum import ErrorCodeEnum
-from app.schemas.recipeDTO import ScanIngredientResponseDTO
+from app.models.recipeModel import MasTagModel
+from app.schemas.recipeDTO import ScanIngredientResponseDTO, AnalyzeFoodResponseDTO
 from app.services import recipeService
 
 import time
@@ -71,11 +72,11 @@ food_schema = {
     "properties": {
         "is_food": {
             "type": "BOOLEAN", 
-            "description": "ตอบ true ถ้ารูปนี้คืออาหารหรือเครื่องดื่ม, ตอบ false ถ้ารูปนี้ไม่ใช่อาหาร"
+            "description": "ตอบ true ถ้ารูปนี้คืออาหาร, ตอบ false ถ้ารูปนี้ไม่ใช่อาหาร"
         },
         "predictions": {
             "type": "ARRAY",
-            "description": "รายชื่ออาหารที่คาดเดา 5 อันดับแรก (ถ้ารูปนี้ไม่ใช่อาหาร ให้ตอบเป็น Array ว่าง [])",
+            "description": "รายชื่ออาหารที่คาดเดา 3 อันดับแรก (ถ้ารูปนี้ไม่ใช่อาหาร ให้ตอบเป็น Array ว่าง [])",
             "items": {
                 "type": "OBJECT",
                 "properties": {
@@ -145,7 +146,7 @@ def scan_food_image(image_bytes: bytes):
     # )
     response = client.models.generate_content(
         model=GOOGLE_ANALIZE_IMG_MODEL,
-        contents=[img, "รูปนี้ใช่อาหารหรือไม่? ถ้าใช่ให้บอกชื่ออาหารที่น่าจะเป็นไปได้ 5 อันดับแรก ถ้าไม่ใช่ให้ตอบว่าไม่ใช่"],
+        contents=[img, "รูปนี้ใช่อาหารหรือไม่? ถ้าใช่ให้บอกชื่ออาหารที่น่าจะเป็นไปได้ 3 อันดับแรก ถ้าไม่ใช่ให้ตอบว่าไม่ใช่"],
         config=types.GenerateContentConfig(
             system_instruction="คุณคือผู้เชี่ยวชาญด้านอาหาร วิเคราะห์รูปภาพและตอบกลับในรูปแบบ JSON. หากเป็นอาหารให้ระบุ is_food เป็น true พร้อมรายชื่อ หากไม่ใช่ให้ระบุ is_food เป็น false และไม่ต้องใส่รายชื่ออาหาร",
             response_mime_type="application/json",
@@ -154,7 +155,7 @@ def scan_food_image(image_bytes: bytes):
     )
     return json.loads(response.text)
     
-def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
+def analyze_food_image(user_id: int, image_bytes: bytes, force_search: bool, db: Session):
     try:
         total_time = time.perf_counter()
 
@@ -163,9 +164,13 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
         t1_end = time.perf_counter()
         print(f"MobileNetV2 ใช้เวลา: {t1_end - t1_start:.2f} วินาที")
 
-        if not prediction_result["is_food"]:
+        if not prediction_result["is_food"] and not force_search:
             print("ไม่ใช่อาหาร by MobileNetV2")
-            raise NotFoundException("รูปภาพนี้ไม่ใช่อาหาร กรุณาเลือกรูปภาพอาหาร")
+            # raise NotFoundException("รูปภาพนี้ไม่ใช่อาหาร กรุณาเลือกรูปภาพอาหาร")
+            return AnalyzeFoodResponseDTO(
+                is_food=False,
+                recipes=[]
+            )
 
         t2_start = time.perf_counter()
         ai_result = scan_food_image(image_bytes)
@@ -195,7 +200,10 @@ def analyze_food_image(user_id: int, image_bytes: bytes, db: Session):
 
         print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
 
-        return recipe_result
+        return AnalyzeFoodResponseDTO(
+            is_food=True,
+            recipes=recipe_result
+        )
     except Exception as ex:
         db.rollback()
         print(f"error: {ex}")
@@ -308,13 +316,19 @@ def analize_ingredient_image(user_id: int, image_bytes: bytes, db: Session):
         print(f"AI คาดเดาว่าเป็น: {ai_result['ingredients']}")
 
         t2_start = time.perf_counter()
-        recipe_result = recipeService.get_recipe_by_ai_ingredient_name(user_id, ai_result["ingredients"], db)
+        tags = db.exec(select(MasTagModel.tag_id, MasTagModel.tag_name).where(MasTagModel.tag_type == "method")).all()
         t2_end = time.perf_counter()
-        print(f"DB ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
+        print(f"DB Tag ใช้เวลา: {t2_end - t2_start:.2f} วินาที")
+
+        t3_start = time.perf_counter()
+        recipe_result = recipeService.get_recipe_by_ai_ingredient_name(user_id, ai_result["ingredients"], db)
+        t3_end = time.perf_counter()
+        print(f"DB Recipe ใช้เวลา: {t3_end - t3_start:.2f} วินาที")
 
         print(f"Total ใช้เวลา: {time.perf_counter() - total_time:.2f} วินาที")
         return ScanIngredientResponseDTO(
             ingredients=ai_result["ingredients"],
+            tags= [{"tag_id": tag_id, "tag_name": tag_name} for tag_id, tag_name in tags],
             recipes=recipe_result
         )
     except Exception as ex:

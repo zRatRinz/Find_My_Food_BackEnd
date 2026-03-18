@@ -5,6 +5,8 @@ import numpy as np
 import json
 import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfVectorizer
+from collections import Counter
+from sentence_transformers import SentenceTransformer
 from app.core import cloudinary, datetimezone
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.recipeModel import (
@@ -20,6 +22,71 @@ from app.schemas.recipeDTO import (
 from app.services import vectorStoreService
 from app.scripts.build_recipe_vectors import thai_tokenizer
 import time
+
+print("⏳ กำลังโหลด Embedding Model (ทำครั้งเดียวตอนเปิดเซิร์ฟเวอร์)...")
+embed_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
+print("✅ โหลด Embedding Model พร้อมใช้งานแล้ว!")
+
+MIN_SCORE_THRESHOLD = 0.8
+BONUS_SCORE = 0.2
+EXACT_MATCH_BONUS = 2.0
+MOBILENET_AGREE_BONUS = 0.15
+
+NORMALIZE_MAP = {
+    "เส้นหมี่": "หมี่",
+    "บะหมี่": "หมี่"
+}
+
+LOW_WEIGHT_WORDS = {"ข้าว", "เส้น", "หมี่", "บะหมี่", "น้ำ", "แห้ง", "ราด", "หน้า", "อาหาร", "จาน", "เมนู", "สูตร"}
+MEDIUM_WEIGHT_WORDS = {"หมู", "ไก่", "เนื้อ", "ปลา", "กุ้ง", "หมึก", "ทะเล", "หอย", "ปู", "ไข่", "เต้าหู้", "ปลากระป๋อง"}
+HIGH_VALUE_WORDS = {
+    "มัสมั่น", "กะเพรา", "ต้มยำ", "ผัดไทย", "ขี้เมา", "เขียวหวาน", 
+    "ส้มตำ", "ราดหน้า", "สุกี้", "ซีอิ๊ว", "หมูแดง", "หมูกรอบ", "สามชั้น", 
+    "ผงกะหรี่", "ผัดฉ่า", "ยำ", "แซ่บ", "แกงส้ม", "แกงเหลือง", "ข้าวซอย", "อเมริกัน",
+    "กระเทียม", "พริกแกง", "คะน้า", "ไข่เจียว", "ลาบ", "น้ำตก", "ข้าวมันไก่", "ข้าวหมก"
+}
+
+def get_token_weight(token, db_token_freq=None):
+    if token in HIGH_VALUE_WORDS:
+        return 3.0
+    elif token in MEDIUM_WEIGHT_WORDS:
+        return 1.0 
+    elif token in LOW_WEIGHT_WORDS:
+        return 0.5
+
+    # 🔥 unknown token handling
+    if db_token_freq:
+        freq = db_token_freq.get(token, 1)
+
+        if freq > 50:
+            return 0.5
+        elif freq > 10:
+            return 1.0
+        else:
+            return 2.0  # rare = important
+
+    return 1.0
+
+def token_match(token, db_recipe_name, db_tokens):
+    # exact match
+    if token in db_tokens:
+        return True
+    
+    if len(token) >= 3 and token in db_recipe_name:
+        return True
+
+    if len(token) > 3:
+        for i in range(1, len(token)):
+            left = token[:i]
+            right = token[i:]
+            if left in db_tokens and right in db_tokens:
+                return True
+
+    return False
+
+def tokenize_and_normalize(text):
+    tokens = thai_tokenizer(text)
+    return [NORMALIZE_MAP.get(t, t) for t in tokens]
 
 def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: int):
     try:
@@ -573,46 +640,165 @@ def get_recipe_by_name(user_id: int | None, recipe_name: str, db: Session):
         print(f"error: {ex}")
         raise
 
+# def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name: list[str], db: Session):
+#     if not recipe_name:
+#         return []
+    
+#     vocab_record = db.get(SysModelVocabularyModel, "recipe_vocab")
+#     if not vocab_record or not vocab_record.idf:
+#         print("ไม่พบ Vocabulary หรือ IDF ในระบบ กรุณารัน Cronjob ก่อน")
+#         return []
+    
+#     vocab_dict = vocab_record.vocabulary if isinstance(vocab_record.vocabulary, dict) else json.loads(vocab_record.vocabulary)
+#     idf_list = vocab_record.idf if isinstance(vocab_record.idf, list) else json.loads(vocab_record.idf)
+#     idf_array = np.array(idf_list, dtype=np.float64)
+
+#     search_vectorizer = TfidfVectorizer(
+#         tokenizer=thai_tokenizer,
+#         token_pattern=None,
+#         lowercase=False,
+#         vocabulary=vocab_dict
+#     )
+
+#     search_vectorizer.idf_ = idf_array
+#     search_vectorizer._tfidf._idf_diag = sp.diags(idf_array)
+
+#     raw_query = " ".join(recipe_name)
+#     search_vector = search_vectorizer.transform([raw_query]).toarray()
+#     search_vector = np.array(search_vector, dtype=np.float32)
+#     # tokens = thai_tokenizer(raw_query)
+#     # unique_tokens = list(dict.fromkeys(tokens))
+#     # search_query = " ".join(unique_tokens)
+
+#     recipe_records = db.exec(select(MapRecipeVectorModel)).all()
+#     if not recipe_records:
+#         return []
+    
+#     recipe_ids = []
+#     recipe_matrix = []
+#     for r in recipe_records:
+#         recipe_ids.append(r.recipe_id)
+#         vec = json.loads(r.vector_data) if isinstance(r.vector_data, str) else r.vector_data
+#         recipe_matrix.append(vec)
+            
+#     recipe_matrix = np.array(recipe_matrix, dtype=np.float32)
+#     sim_scores = cosine_similarity(search_vector, recipe_matrix)[0]
+
+#     recipe_details = db.exec(
+#         select(TrnRecipeModel.recipe_id, TrnRecipeModel.recipe_name)
+#         .where(TrnRecipeModel.recipe_id.in_(recipe_ids))
+#     ).all()
+#     recipe_name_map = {r.recipe_id: r.recipe_name for r in recipe_details}
+
+#     ai_token_map = {
+#         ai_name: set([t for t in tokenize_and_normalize(ai_name) if len(t) > 1])
+#         for ai_name in recipe_name
+#     }
+
+#     db_token_map = {
+#         r_id: set([t for t in tokenize_and_normalize(recipe_name_map.get(r_id, "")) if len(t) > 1])
+#         for r_id in recipe_ids
+#     }
+
+#     is_agreed_by_gemini = False
+#     if mobilenet_class and mobilenet_class != "non_food":
+#         for g_name in recipe_name:
+#             if mobilenet_class in g_name:
+#                 is_agreed_by_gemini = True
+#                 break
+    
+#     if not is_agreed_by_gemini and mobilenet_class != "non_food":
+#         print(f"[Warning] MobileNet ทายว่า '{mobilenet_class}' แต่ Gemini ไม่เห็นด้วยเลย")
+
+#     scored_recipes = []
+
+#     for i in range(len(recipe_ids)):
+#         r_id = recipe_ids[i]
+#         base_score = sim_scores[i]
+#         db_recipe_name = recipe_name_map.get(r_id, "")
+#         db_tokens = db_token_map[r_id]
+#         final_score = base_score
+
+#         if is_agreed_by_gemini and mobilenet_class in db_recipe_name:
+#             final_score += MOBILENET_AGREE_BONUS
+
+#         for ai_name in recipe_name:
+#             if db_recipe_name in ai_name or ai_name in db_recipe_name:
+#                 final_score += EXACT_MATCH_BONUS
+#                 break
+
+#             ai_tokens = ai_token_map[ai_name]
+#             common_tokens = db_tokens.intersection(ai_tokens)
+
+#             if len(db_tokens) > 0:
+#                 overlap_ratio = len(common_tokens) / len(db_tokens)
+#                 if overlap_ratio >= 0.5:
+#                     final_score += BONUS_SCORE
+#                     break
+
+#         scored_recipes.append((r_id, final_score))
+
+#     # scored_recipes = [(recipe_ids[i], sim_scores[i]) for i in range(len(recipe_ids))]
+#     scored_recipes.sort(key=lambda x: x[1], reverse=True)
+
+#     print(f"\n[Vector Search] ผลลัพธ์การจับคู่กับรูปภาพ:")
+#     for r_id, score in scored_recipes[:10]:
+#         print(f"Recipe ID: {r_id:2} | ความแม่นยำ: {score:.4f} | {recipe_name_map.get(r_id, '')}")
+
+#     top_recipe_ids = [r_id for r_id, score in scored_recipes[:10] if score >= MIN_SCORE_THRESHOLD]
+#     if not top_recipe_ids:
+#         print("AI เดาชื่อมา แต่หาใน DB ไม่เจอสิ่งที่คล้ายกันเลย")
+#         return []
+
+#     visibility_condition = or_(
+#         TrnRecipeModel.is_public == True,
+#         TrnRecipeModel.user_id == user_id
+#     )
+
+#     # name_condition = or_(*[TrnRecipeModel.recipe_name.contains(name) for name in recipe_name])
+
+#     query = select(
+#         TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
+#     ).outerjoin(
+#         MapRecipeLikeModel,
+#         MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+#     ).where(
+#         TrnRecipeModel.is_active == True,
+#         # name_condition, 
+#         TrnRecipeModel.recipe_id.in_(top_recipe_ids),
+#         visibility_condition
+#     ).group_by(
+#         TrnRecipeModel.recipe_id
+#     ).options(
+#         selectinload(TrnRecipeModel.user),
+#         selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
+#     )
+
+#     result = db.exec(query).all()
+#     recipe_dict = {recipe.recipe_id: (recipe, like_count) for recipe, like_count in result}
+#     sorted_recipes = [recipe_dict[r_id] for r_id in top_recipe_ids if r_id in recipe_dict]
+
+#     return [ RecipeResponseDTO.model_validate(
+#         recipe, from_attributes=True
+#     ).model_copy(
+#         update={"like_count": like_count}
+#     ) for recipe, like_count in sorted_recipes]
+
 def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name: list[str], db: Session):
     if not recipe_name:
         return []
     
-    vocab_record = db.get(SysModelVocabularyModel, "recipe_vocab")
-    if not vocab_record or not vocab_record.idf:
-        print("ไม่พบ Vocabulary หรือ IDF ในระบบ กรุณารัน Cronjob ก่อน")
-        return []
-    
-    vocab_dict = vocab_record.vocabulary if isinstance(vocab_record.vocabulary, dict) else json.loads(vocab_record.vocabulary)
-    idf_list = vocab_record.idf if isinstance(vocab_record.idf, list) else json.loads(vocab_record.idf)
-
-    idf_array = np.array(idf_list, dtype=np.float64)
-
-    search_vectorizer = TfidfVectorizer(
-        tokenizer=thai_tokenizer,
-        token_pattern=None,
-        lowercase=False,
-        vocabulary=vocab_dict
-    )
-
-    search_vectorizer.idf_ = idf_array
-    search_vectorizer._tfidf._idf_diag = sp.diags(idf_array)
-
+    # --- 1. แปลงคำค้นหาเป็น Vector ---
     raw_query = " ".join(recipe_name)
-    tokens = thai_tokenizer(raw_query)
-    unique_tokens = list(dict.fromkeys(tokens))
-    search_query = " ".join(unique_tokens)
-    # search_query = " ".join(recipe_name)
+    search_vector = embed_model.encode([raw_query])
 
-    search_vector = search_vectorizer.transform([search_query]).toarray()
-    search_vector = np.array(search_vector, dtype=np.float32)
-
+    # --- 2. ดึง Vector จาก DB ---
     recipe_records = db.exec(select(MapRecipeVectorModel)).all()
     if not recipe_records:
         return []
     
     recipe_ids = []
     recipe_matrix = []
-
     for r in recipe_records:
         recipe_ids.append(r.recipe_id)
         vec = json.loads(r.vector_data) if isinstance(r.vector_data, str) else r.vector_data
@@ -621,6 +807,84 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
     recipe_matrix = np.array(recipe_matrix, dtype=np.float32)
     sim_scores = cosine_similarity(search_vector, recipe_matrix)[0]
 
+    # --- 3. ดึงข้อมูลชื่อเมนูมาเตรียมคำนวณ ---
+    # --- 3. ดึงข้อมูลชื่อเมนูมาเตรียมคำนวณ ---
+    recipe_details = db.exec(
+        select(TrnRecipeModel)
+        .where(TrnRecipeModel.recipe_id.in_(recipe_ids))
+        .options(selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag))
+    ).all()
+    
+    # สร้าง Map 2 ตัว: ตัวนึงเก็บชื่อเพียวๆ (ไว้โชว์), อีกตัวเก็บชื่อ+Tag (ไว้หั่นคำ)
+    recipe_name_map = {}
+    recipe_full_text_map = {}
+    
+    for r in recipe_details:
+        title = r.recipe_name
+        recipe_name_map[r.recipe_id] = title  # 🟢 เติมบรรทัดนี้กลับคืนมา!
+        
+        tags_str = " ".join([t.tag.tag_name for t in r.recipe_tags]) if r.recipe_tags else ""
+        recipe_full_text_map[r.recipe_id] = f"{title} {tags_str}".strip()
+
+    # 🟢 โค้ดที่เผลอลบไป (เอาคำที่ AI ทายมาหั่นเป็น Token) ต้องมีบรรทัดนี้นะ!
+    ai_token_map = {
+        ai_name: set([t for t in tokenize_and_normalize(ai_name) if len(t) > 1])
+        for ai_name in recipe_name
+    }
+
+    # ตอนสร้าง db_token_map ให้หั่นคำจาก "ชื่อ + Tag" แทนที่จะเป็นชื่อเพียวๆ
+    db_token_map = {
+        r_id: set([t for t in tokenize_and_normalize(recipe_full_text_map.get(r_id, "")) if len(t) > 1])
+        for r_id in recipe_ids
+    }
+
+    db_token_freq = Counter()
+    for tokens in db_token_map.values():
+        db_token_freq.update(tokens)
+
+    db_token_freq = Counter()
+    for tokens in db_token_map.values():
+        db_token_freq.update(tokens)
+
+    # --- 4. สกัด Anchor Intent (หาพระเอกตัวจริง) ---
+    ai_doc_freq = Counter()
+    for tokens in ai_token_map.values():
+        for t in tokens:
+            ai_doc_freq[t] += 1
+    
+    # คำที่เป็นส่วนประกอบทั่วไป ห้ามเอามาเป็น Strict (เพื่อป้องกันมันให้คะแนนมั่ว)
+    STOPWORDS = {"แกง", "ผัด", "ต้ม", "ทอด", "นึ่ง", "ย่าง", "สด", "น้ำ"}
+
+    ai_strict_tokens = [
+        t for t in ai_doc_freq.keys()
+        if get_token_weight(t, db_token_freq) >= 2.0
+        and t not in STOPWORDS
+    ]
+
+    # 🔥 กฎใหม่ที่ฉลาดขึ้น: หาคำที่ AI ทายตรงกันเสียงข้างมาก (Majority)
+    majority_count = (len(recipe_name) // 2) + 1 if len(recipe_name) > 1 else 1
+    
+    # คำโหลสุดๆ ที่ไม่ยอมให้เป็นพระเอกเด็ดขาด (มีแค่นี้พอ)
+    IGNORE_ANCHORS = {"ข้าว", "น้ำ", "เส้น", "อาหาร", "จาน", "เมนู", "สูตร"}
+
+    agreed_tokens = [
+        t for t, freq in ai_doc_freq.items()
+        if freq >= majority_count and t not in IGNORE_ANCHORS
+    ]
+
+    # ลอจิกการตั้งพระเอก
+    if agreed_tokens:
+        # 🟢 1. ถ้ามีคำที่ AI เห็นตรงกัน ให้คำนั้นเป็นพระเอกเลย! (เคสนี้จะได้ 'หมู', 'ทอด')
+        ai_anchor_tokens = agreed_tokens
+    else:
+        # 🟡 2. ถ้า AI ทายเสียงแตกหมด ค่อยใช้ Strict Tokens เป็นพระเอกจำเป็น
+        ai_anchor_tokens = ai_strict_tokens if ai_strict_tokens else list(ai_doc_freq.keys())
+
+    print("All AI Tokens:", list(ai_doc_freq.keys()))
+    print("Strict Tokens (ตัวประกอบให้โบนัส):", ai_strict_tokens)
+    print("🎯 Anchor Tokens (พระเอกตัวจริง):", ai_anchor_tokens)
+
+    # --- 5. เช็ค MobileNet ---
     is_agreed_by_gemini = False
     if mobilenet_class and mobilenet_class != "non_food":
         for g_name in recipe_name:
@@ -631,39 +895,89 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
     if not is_agreed_by_gemini and mobilenet_class != "non_food":
         print(f"[Warning] MobileNet ทายว่า '{mobilenet_class}' แต่ Gemini ไม่เห็นด้วยเลย")
 
-    recipe_details = db.exec(
-        select(TrnRecipeModel.recipe_id, TrnRecipeModel.recipe_name)
-        .where(TrnRecipeModel.recipe_id.in_(recipe_ids))
-    ).all()
-    recipe_name_map = {r.recipe_id: r.recipe_name for r in recipe_details}
-
+    # --- 6. ลอจิกให้คะแนน (Negative Filtering โหดจัด) ---
     scored_recipes = []
-    BONUS_SCORE = 0.15
 
     for i in range(len(recipe_ids)):
         r_id = recipe_ids[i]
-        base_score = sim_scores[i]
-        db_recipe_name = recipe_name_map.get(r_id, "")
+        base_score = float(sim_scores[i])
 
+        if base_score < 0.35:
+            continue
+
+        db_recipe_name = recipe_name_map.get(r_id, "")
+        db_tokens = db_token_map[r_id]
         final_score = base_score
 
-        if is_agreed_by_gemini:
-            if mobilenet_class in db_recipe_name: 
-                final_score += BONUS_SCORE
+        # 🌟 ท่าไม้ตาย (บัตร VIP): เช็คว่าชื่อเมนูตรงกับที่ AI พ่นมาตรงๆ ไหม?
+        is_exact_match = False
+        for ai_name in recipe_name:
+            if db_recipe_name in ai_name or ai_name in db_recipe_name:
+                is_exact_match = True
+                break
 
+        # ด่านตรวจที่ 1: Negative Filtering (ถ้าถือบัตร VIP จะไม่โดนหักคะแนน!)
+        if base_score < 0.5 and not is_exact_match:
+            final_score *= 0.2
+
+        # 🔥 บังคับว่าต้องมี "พระเอก" ไม่งั้นหัก 90% (ยกเว้นคนถือบัตร VIP)
+        if ai_anchor_tokens and not is_exact_match:
+            has_anchor = any(token_match(t, db_recipe_name, db_tokens) for t in ai_anchor_tokens)
+            if not has_anchor:
+                final_score *= 0.1 
+                
+        if is_agreed_by_gemini and mobilenet_class in db_recipe_name:
+            final_score += MOBILENET_AGREE_BONUS
+
+        has_any_overlap = is_exact_match
+
+        # แจกโบนัสคนถือบัตร VIP ทันที
+        if is_exact_match:
+            final_score += EXACT_MATCH_BONUS
+
+        # คัดกรองโบนัสด้วย Weighted Score สำหรับเมนูอื่นๆ
+        for ai_name in recipe_name:
+            ai_tokens = ai_token_map[ai_name]
+            common_tokens = set()
+            for t in ai_tokens:
+                if token_match(t, db_recipe_name, db_tokens):
+                    common_tokens.add(t)
+            
+            if common_tokens:
+                has_any_overlap = True
+                weighted_overlap = sum(get_token_weight(t, db_token_freq) for t in common_tokens)
+                db_total_weight = sum(get_token_weight(t, db_token_freq) for t in db_tokens)
+
+                if db_total_weight > 0:
+                    overlap_ratio = weighted_overlap / db_total_weight
+                    if overlap_ratio >= 0.5:
+                        final_score += BONUS_SCORE
+                        break
+
+        if not has_any_overlap:
+            final_score *= 0.2
+
+        # 🟢 ด่านสุดท้าย: ถ้าไม่ใช่พระเอก และไม่ได้ถือบัตร VIP... คัดทิ้ง!
+        important_overlap = any(token_match(t, db_recipe_name, db_tokens) for t in ai_anchor_tokens)
+        if not important_overlap and not is_exact_match:
+            continue
+
+        high_match = sum(1 for t in ai_strict_tokens if token_match(t, db_recipe_name, db_tokens))
+        final_score += high_match * 0.3
+        
         scored_recipes.append((r_id, final_score))
 
-    # scored_recipes = [(recipe_ids[i], sim_scores[i]) for i in range(len(recipe_ids))]
+    # --- 7. จัดเรียงและ Query DB ส่งกลับ ---
     scored_recipes.sort(key=lambda x: x[1], reverse=True)
 
-    print(f"\n[Vector Search] ผลลัพธ์การจับคู่กับรูปภาพ:")
+    print(f"\n[Hybrid Search] ผลลัพธ์:")
     for r_id, score in scored_recipes[:10]:
-        print(f"Recipe ID: {r_id:2} | ความแม่นยำ: {score:.4f}")
+        print(f"Recipe ID: {r_id:2} | Score: {score:.4f} | {recipe_name_map.get(r_id, '')}")
 
-    MIN_SCORE_THRESHOLD = 0.4 
     top_recipe_ids = [r_id for r_id, score in scored_recipes[:10] if score >= MIN_SCORE_THRESHOLD]
+    
     if not top_recipe_ids:
-        print("AI เดาชื่อมา แต่หาใน DB ไม่เจอสิ่งที่คล้ายกันเลย")
+        print("AI เดาชื่อมา แต่หาใน DB ไม่เจอสิ่งที่คล้ายกันเลย (ไม่ผ่าน Threshold)")
         return []
 
     visibility_condition = or_(
@@ -671,16 +985,12 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
         TrnRecipeModel.user_id == user_id
     )
 
-    # name_condition = or_(*[TrnRecipeModel.recipe_name.contains(name) for name in recipe_name])
-
     query = select(
         TrnRecipeModel, func.count(MapRecipeLikeModel.user_id).label("like_count")
     ).outerjoin(
-        MapRecipeLikeModel,
-        MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
+        MapRecipeLikeModel, MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
     ).where(
         TrnRecipeModel.is_active == True,
-        # name_condition, 
         TrnRecipeModel.recipe_id.in_(top_recipe_ids),
         visibility_condition
     ).group_by(
@@ -694,11 +1004,10 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
     recipe_dict = {recipe.recipe_id: (recipe, like_count) for recipe, like_count in result}
     sorted_recipes = [recipe_dict[r_id] for r_id in top_recipe_ids if r_id in recipe_dict]
 
-    return [ RecipeResponseDTO.model_validate(
-        recipe, from_attributes=True
-    ).model_copy(
+    return [ RecipeResponseDTO.model_validate(recipe, from_attributes=True).model_copy(
         update={"like_count": like_count}
     ) for recipe, like_count in sorted_recipes]
+
 
 def get_recipe_detail_by_recipe_id(db: Session, recipe_id: int, user_id: int | None = None):
     recipe = db.exec(
@@ -955,7 +1264,7 @@ def get_search_recipe_filter_option(user_id: int | None, categories: list[int], 
         update={"like_count": like_count, "is_liked": is_liked > 0}
     ) for recipe, like_count, is_liked in result]
 
-def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str], db: Session):
+def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str], tag_list: list[int], db: Session):
     if not ingredient_list:
         return []
     
@@ -968,40 +1277,66 @@ def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str
     else:
         visibility_condition = TrnRecipeModel.is_public == True
 
-    ingredient_condition = or_(
-        *[
-            or_(
-                MasIngredientModel.ingredient_name.contains(name),
-                MasIngredientModel.ingredient_group.contains(name),
-                literal(name).contains(MasIngredientModel.ingredient_group)
-            )
-             for name in ingredient_list
-        ]
-    )
-    match_count = func.count(distinct(MasIngredientModel.ingredient_id)).label("match_count")
     like_count_col = func.count(distinct(MapRecipeLikeModel.user_id)).label("like_count")
-    
     query = select(
         TrnRecipeModel, like_count_col
     ).outerjoin(
         MapRecipeLikeModel,
         MapRecipeLikeModel.recipe_id == TrnRecipeModel.recipe_id
-    ).join(
-        DtlRecipeIngredientModel, 
-        DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id
-    ).join(
-        MasIngredientModel, 
-        MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id
-    ).where(
+    )
+
+    where_clauses = [
         TrnRecipeModel.is_active == True,
-        DtlRecipeIngredientModel.is_main_ingredient == True,
-        ingredient_condition, 
         visibility_condition
+    ]
+    order_by_clause = []
+
+    if ingredient_list:
+        ingredient_condition = or_(
+            *[
+                or_(
+                    MasIngredientModel.ingredient_name.contains(name),
+                    MasIngredientModel.ingredient_group.contains(name),
+                    literal(name).contains(MasIngredientModel.ingredient_group)
+                )
+                for name in ingredient_list
+            ]
+        )
+
+        query = query.join(
+            DtlRecipeIngredientModel, 
+            DtlRecipeIngredientModel.recipe_id == TrnRecipeModel.recipe_id
+        ).join(
+            MasIngredientModel,
+            MasIngredientModel.ingredient_id == DtlRecipeIngredientModel.ingredient_id
+        )
+
+        where_clauses.extend(
+            [
+                DtlRecipeIngredientModel.is_main_ingredient == True,
+                ingredient_condition
+            ]
+        )
+
+        match_count = func.count(distinct(MasIngredientModel.ingredient_id))
+        order_by_clause.append(match_count.desc())
+
+    if tag_list:
+        query = query.join(
+            MapRecipeTagModel,
+            MapRecipeTagModel.recipe_id == TrnRecipeModel.recipe_id
+        )
+
+        where_clauses.append(MapRecipeTagModel.tag_id.in_(tag_list))
+
+    order_by_clause.append(like_count_col.desc())
+    
+    query = query.where(
+        *where_clauses
     ).group_by(
         TrnRecipeModel.recipe_id
     ).order_by(
-        match_count.desc(),
-        like_count_col.desc()
+        *order_by_clause
     ).options(
         selectinload(TrnRecipeModel.user),
         selectinload(TrnRecipeModel.recipe_tags).joinedload(MapRecipeTagModel.tag)
@@ -1012,3 +1347,4 @@ def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str
     ).model_copy(
         update={"like_count": like_count}
     ) for recipe, like_count in result]
+

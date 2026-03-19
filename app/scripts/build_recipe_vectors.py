@@ -3,16 +3,12 @@ from sqlalchemy.orm import selectinload
 from sklearn.feature_extraction.text import TfidfVectorizer
 from pythainlp.tokenize import word_tokenize
 import traceback
-from sentence_transformers import SentenceTransformer
+from app.core import aiConfig
 from app.core.utils.feature_builder import build_recipe_document
 from app.db.database import engine
 from app.models.recipeModel import TrnRecipeModel, MapRecipeTagModel
 from app.models.userModel import MasUserModel
 from app.models.systemModel import MapRecipeVectorModel, SysModelVocabularyModel, SysCacheVersionModel
-
-print("⏳ กำลังโหลด Embedding Model สำหรับ Cronjob...")
-embed_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
-print("✅ โหลดสำเร็จ!")
 
 def thai_tokenizer(text):
     return word_tokenize(text, engine="newmm")
@@ -107,7 +103,7 @@ def run():
             docs = [build_recipe_document(recipe) for recipe in recipes]
 
             print(f"กำลังแปลง Vector สำหรับ {len(docs)} สูตร...")
-            matrix = embed_model.encode(docs)
+            matrix = aiConfig.embed_model.encode(docs)
 
             has_change = False
 

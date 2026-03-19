@@ -6,8 +6,8 @@ import json
 import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfVectorizer
 from collections import Counter
-from sentence_transformers import SentenceTransformer
-from app.core import cloudinary, datetimezone
+
+from app.core import cloudinary, datetimezone, aiConfig
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.recipeModel import (
     TrnRecipeModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeLikeModel, MasIngredientModel, 
@@ -22,10 +22,6 @@ from app.schemas.recipeDTO import (
 from app.services import vectorStoreService
 from app.scripts.build_recipe_vectors import thai_tokenizer
 import time
-
-print("⏳ กำลังโหลด Embedding Model (ทำครั้งเดียวตอนเปิดเซิร์ฟเวอร์)...")
-embed_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
-print("✅ โหลด Embedding Model พร้อมใช้งานแล้ว!")
 
 MIN_SCORE_THRESHOLD = 0.8
 BONUS_SCORE = 0.2
@@ -177,9 +173,12 @@ def update_recipe_header_by_recipe_id(db: Session, user_id: int, recipe_id: int,
         raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
         
     try:
-        update_data = request_body.model_dump(exclude={"categories", "tags"}, exclude_unset=True)
+        update_data = request_body.model_dump(exclude={"categories", "tags", "is_created_by_ai"}, exclude_unset=True)
         for field, value in update_data.items():
             setattr(recipe, field, value)
+
+        if recipe.is_created_by_ai:
+            recipe.is_active = True
 
         recipe.update_date = datetimezone.get_thai_now()
 
@@ -790,7 +789,7 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
     
     # --- 1. แปลงคำค้นหาเป็น Vector ---
     raw_query = " ".join(recipe_name)
-    search_vector = embed_model.encode([raw_query])
+    search_vector = aiConfig.embed_model.encode([raw_query])
 
     # --- 2. ดึง Vector จาก DB ---
     recipe_records = db.exec(select(MapRecipeVectorModel)).all()
@@ -842,10 +841,6 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
     for tokens in db_token_map.values():
         db_token_freq.update(tokens)
 
-    db_token_freq = Counter()
-    for tokens in db_token_map.values():
-        db_token_freq.update(tokens)
-
     # --- 4. สกัด Anchor Intent (หาพระเอกตัวจริง) ---
     ai_doc_freq = Counter()
     for tokens in ai_token_map.values():
@@ -880,6 +875,16 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
         # 🟡 2. ถ้า AI ทายเสียงแตกหมด ค่อยใช้ Strict Tokens เป็นพระเอกจำเป็น
         ai_anchor_tokens = ai_strict_tokens if ai_strict_tokens else list(ai_doc_freq.keys())
 
+    GENERIC_ANCHORS = {"หมู", "ไก่", "เนื้อ", "ปลา", "กุ้ง", "ไข่"}
+
+    ai_anchor_tokens = [
+        t for t in ai_anchor_tokens
+        if t not in GENERIC_ANCHORS
+    ]
+
+    # fallback ถ้าโดนกรองหมด
+    if not ai_anchor_tokens:
+        ai_anchor_tokens = agreed_tokens or ai_strict_tokens
     print("All AI Tokens:", list(ai_doc_freq.keys()))
     print("Strict Tokens (ตัวประกอบให้โบนัส):", ai_strict_tokens)
     print("🎯 Anchor Tokens (พระเอกตัวจริง):", ai_anchor_tokens)
@@ -911,9 +916,18 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
 
         # 🌟 ท่าไม้ตาย (บัตร VIP): เช็คว่าชื่อเมนูตรงกับที่ AI พ่นมาตรงๆ ไหม?
         is_exact_match = False
+        exactness_bonus = 0.0 # 🟢 เพิ่มตัวแปรเก็บโบนัสความเป๊ะ
+        
         for ai_name in recipe_name:
             if db_recipe_name in ai_name or ai_name in db_recipe_name:
                 is_exact_match = True
+                
+                # 🟢 คำนวณความต่างของความยาวตัวอักษร (ยิ่งความยาวใกล้เคียงกัน ยิ่งได้คะแนนเยอะ)
+                length_diff = abs(len(db_recipe_name) - len(ai_name))
+                
+                # ถ้าต่างกันแค่ไม่เกิน 5 ตัวอักษร (เช่น 'ข้าวผัดไข่' กับ 'ข้าวผัดหมู') จะได้โบนัสเต็มๆ
+                # แต่ถ้าต่างกันเยอะ (เช่น 'ข้าวผัด' กับ 'ข้าวผัดพริกแกงหมูสามชั้น') โบนัสจะน้อยลงเรื่อยๆ
+                exactness_bonus = max(0, 1.0 - (length_diff * 0.05)) 
                 break
 
         # ด่านตรวจที่ 1: Negative Filtering (ถ้าถือบัตร VIP จะไม่โดนหักคะแนน!)
@@ -924,7 +938,7 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
         if ai_anchor_tokens and not is_exact_match:
             has_anchor = any(token_match(t, db_recipe_name, db_tokens) for t in ai_anchor_tokens)
             if not has_anchor:
-                final_score *= 0.1 
+                continue  
                 
         if is_agreed_by_gemini and mobilenet_class in db_recipe_name:
             final_score += MOBILENET_AGREE_BONUS
@@ -933,7 +947,7 @@ def get_recipe_by_ai_recipe_name(user_id: int, mobilenet_class: str, recipe_name
 
         # แจกโบนัสคนถือบัตร VIP ทันที
         if is_exact_match:
-            final_score += EXACT_MATCH_BONUS
+            final_score += EXACT_MATCH_BONUS + (exactness_bonus * 2.0)
 
         # คัดกรองโบนัสด้วย Weighted Score สำหรับเมนูอื่นๆ
         for ai_name in recipe_name:

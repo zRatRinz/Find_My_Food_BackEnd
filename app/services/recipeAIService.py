@@ -1,6 +1,7 @@
 from PIL import Image
 import numpy as np
 import ai_edge_litert.interpreter as tflite
+import tensorflow as tf
 import io
 from google import genai
 from google.genai import types
@@ -17,13 +18,6 @@ from app.services import recipeService
 
 import time
 
-print("📦 กำลังโหลดโมเดล TF Lite...")
-interpreter = tflite.Interpreter(model_path="app/ai/model_11class_new.tflite")
-interpreter.allocate_tensors()
-
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
 # CLASS_NAMES = ["food", "non_food"]
 CLASS_NAMES = [
     'ข้าวผัด', 'ผัดกะเพรา', 'ผัดไท',
@@ -32,10 +26,18 @@ CLASS_NAMES = [
     'ต้มยำ', 'non_food'
 ]
 
-dummy_input = np.zeros(input_details[0]['shape'], dtype=np.float32)
-interpreter.set_tensor(input_details[0]['index'], dummy_input)
-interpreter.invoke()
-print("วอร์มอัปโมเดล TF Lite พร้อมใช้งาน!")
+print("กำลังโหลดโมเดล Master (ตัวเต็ม)...")
+
+master_model = tf.keras.models.load_model("app/ai/MNV2_Project_Final_11class_new.keras")
+feature_extractor = tf.keras.Model(
+    inputs=master_model.inputs, 
+    outputs=master_model.layers[-2].output # index -2 คือชั้นก่อนที่จะแยกเป็น 11 คลาส
+)
+dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
+master_model.predict(dummy_input, verbose=0)
+feature_extractor.predict(dummy_input, verbose=0)
+print("โหลด Master Model สำเร็จ!")
+
 
 client = genai.Client(api_key=GOOGLE_AI_STUDIO_KEY)
 
@@ -164,12 +166,9 @@ def predict_food_image(image_bytes: bytes):
     image_batch = np.expand_dims(image_array, axis=0)
 
 
-    interpreter.set_tensor(input_details[0]['index'], image_batch)
-    interpreter.invoke()
-    # predictions = model.predict(image_batch)
-    predictions = interpreter.get_tensor(output_details[0]['index'])
+    predictions = master_model.predict(image_batch, verbose=0)
     scores = predictions[0]
-
+    # predictions = model.predict(image_batch)  
         
     predicted_index = np.argmax(scores)
     confidence = scores[predicted_index]
@@ -182,6 +181,17 @@ def predict_food_image(image_bytes: bytes):
         "class_name": result_class,
         "confidence": round(float(confidence) * 100, 2)
     }
+
+def get_image_vector(image_bytes: bytes) -> list[float]:
+    """แปลงรูปภาพเป็น Vector ความยาว 1280 มิติ"""
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = image.resize((224, 224))
+    
+    image_array = np.array(image).astype("float32")
+    image_batch = np.expand_dims(image_array, axis=0)
+    
+    features = feature_extractor.predict(image_batch, verbose=0)
+    return features[0].tolist()
     
 def scan_food_image(image_bytes: bytes):
     img = Image.open(io.BytesIO(image_bytes))
@@ -243,8 +253,17 @@ def analyze_food_image(user_id: int, image_bytes: bytes, force_search: bool, db:
         predicted_names = [recipe["name"] for recipe in ai_result["predictions"]]
         print(f"AI คาดเดาว่าเป็น: {predicted_names}")
 
+        t_vec_start = time.perf_counter()
+        uploaded_img_vector = get_image_vector(image_bytes)
+        print(f"สกัด Image Vector ใช้เวลา: {time.perf_counter() - t_vec_start:.2f} วินาที")
+
         t3_start = time.perf_counter()
-        recipe_result = recipeService.get_recipe_by_ai_recipe_name(user_id, prediction_result["class_name"], predicted_names, db)
+        recipe_result = recipeService.get_recipe_by_ai_recipe_name(
+            user_id, prediction_result["class_name"], predicted_names, uploaded_img_vector, db
+        )
+        # recipe_result = recipeService.get_recipe_by_image_only(
+        #     user_id, uploaded_img_vector, db
+        # )
         t3_end = time.perf_counter()
         print(f"DB ใช้เวลา: {t3_end - t3_start:.2f} วินาที")
 

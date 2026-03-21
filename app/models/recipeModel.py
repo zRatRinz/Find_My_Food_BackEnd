@@ -1,4 +1,5 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Column
+from sqlalchemy.dialects.postgresql import JSONB
 from typing import TYPE_CHECKING
 from datetime import datetime
 from app.core import datetimezone
@@ -124,3 +125,8 @@ class MasTagModel(SQLModel, table=True):
     tag_type: str
 
     recipes: list["MapRecipeTagModel"] = Relationship(back_populates="tag")
+
+class MapRecipeImageVectorModel(SQLModel, table=True):
+    __tablename__ = "map_recipe_image_vector"
+    recipe_id: int = Field(foreign_key="trn_recipe.recipe_id", primary_key=True)
+    image_vector: list[float] | dict = Field(sa_column=Column(JSONB))

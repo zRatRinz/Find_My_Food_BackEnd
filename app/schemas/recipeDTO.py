@@ -63,6 +63,10 @@ class RecipeResponseDTO(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class RecipeWithHighLikeResponseDTO(BaseModel):
+    gen_z_recipes: list[RecipeResponseDTO]
+    recipes: list[RecipeResponseDTO]
+
 class TagResponseDTO(BaseModel):
     tag_id: int
     tag_name: str

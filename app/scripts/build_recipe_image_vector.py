@@ -2,26 +2,35 @@ import io
 import time
 import requests
 import numpy as np
-import tensorflow as tf
+import ai_edge_litert.interpreter as tflite
 from PIL import Image
 from sqlmodel import Session, select
 from app.db.database import engine 
 from app.models.recipeModel import TrnRecipeModel, MapRecipeImageVectorModel 
 from app.models.userModel import MasUserModel
 
-print("⏳ กำลังโหลด MobileNetV2 Feature Extractor...")
-base_model = tf.keras.applications.MobileNetV2(weights='imagenet', include_top=False, pooling='avg')
-print("✅ โหลด MobileNetV2 สำเร็จ!")
+print("กำลังโหลด TF Lite Feature Extractor...")
+feature_interpreter = tflite.Interpreter(model_path="app/ai/feature_extractor.tflite")
+feature_interpreter.allocate_tensors()
+feat_input_details = feature_interpreter.get_input_details()
+feat_output_details = feature_interpreter.get_output_details()
+
+print("กำลังวอร์มอัปโมเดล...")
+dummy_feat_input = np.zeros(feat_input_details[0]['shape'], dtype=np.float32)
+feature_interpreter.set_tensor(feat_input_details[0]['index'], dummy_feat_input)
+feature_interpreter.invoke()
+print("โหลด TF Lite สำเร็จ!")
 
 def get_image_vector_from_bytes(image_bytes: bytes) -> list[float]:
-    """แปลงรูปภาพเป็น Array 1280 มิติ"""
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = image.resize((224, 224))
     
     image_array = np.array(image).astype("float32")
     image_batch = np.expand_dims(image_array, axis=0)
     
-    features = base_model.predict(image_batch, verbose=0)
+    feature_interpreter.set_tensor(feat_input_details[0]['index'], image_batch)
+    feature_interpreter.invoke()
+    features = feature_interpreter.get_tensor(feat_output_details[0]['index'])
     return features[0].tolist()
 
 def process_all_recipe_images(db: Session):

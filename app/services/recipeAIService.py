@@ -1,7 +1,6 @@
 from PIL import Image
 import numpy as np
 import ai_edge_litert.interpreter as tflite
-import tensorflow as tf
 import io
 from google import genai
 from google.genai import types
@@ -26,17 +25,26 @@ CLASS_NAMES = [
     'ต้มยำ', 'non_food'
 ]
 
-print("กำลังโหลดโมเดล Master (ตัวเต็ม)...")
+print("กำลังโหลดโมเดล TF Lite ทั้ง 2 ตัว...")
+# --- 1. โหลดโมเดลทายชื่อ 11 คลาส ---
+classifier_interpreter = tflite.Interpreter(model_path="app/ai/model_11class_new.tflite")
+classifier_interpreter.allocate_tensors()
+class_input_details = classifier_interpreter.get_input_details()
+class_output_details = classifier_interpreter.get_output_details()
+# --- 2. โหลดโมเดลสกัดลายนิ้วมือภาพ (ตัวใหม่) ---
+feature_interpreter = tflite.Interpreter(model_path="app/ai/feature_extractor.tflite")
+feature_interpreter.allocate_tensors()
+feat_input_details = feature_interpreter.get_input_details()
+feat_output_details = feature_interpreter.get_output_details()
+print("กำลังวอร์มอัปโมเดล...")
+dummy_class_input = np.zeros(class_input_details[0]['shape'], dtype=np.float32)
+classifier_interpreter.set_tensor(class_input_details[0]['index'], dummy_class_input)
+classifier_interpreter.invoke()
 
-master_model = tf.keras.models.load_model("app/ai/MNV2_Project_Final_11class_new.keras")
-feature_extractor = tf.keras.Model(
-    inputs=master_model.inputs, 
-    outputs=master_model.layers[-2].output # index -2 คือชั้นก่อนที่จะแยกเป็น 11 คลาส
-)
-dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
-master_model.predict(dummy_input, verbose=0)
-feature_extractor.predict(dummy_input, verbose=0)
-print("โหลด Master Model สำเร็จ!")
+dummy_feat_input = np.zeros(feat_input_details[0]['shape'], dtype=np.float32)
+feature_interpreter.set_tensor(feat_input_details[0]['index'], dummy_feat_input)
+feature_interpreter.invoke()
+print("วอร์มอัปโมเดล TF Lite พร้อมใช้งาน!")
 
 
 client = genai.Client(api_key=GOOGLE_AI_STUDIO_KEY)
@@ -166,7 +174,9 @@ def predict_food_image(image_bytes: bytes):
     image_batch = np.expand_dims(image_array, axis=0)
 
 
-    predictions = master_model.predict(image_batch, verbose=0)
+    classifier_interpreter.set_tensor(class_input_details[0]['index'], image_batch)
+    classifier_interpreter.invoke()
+    predictions = classifier_interpreter.get_tensor(class_output_details[0]['index'])
     scores = predictions[0]
     # predictions = model.predict(image_batch)  
         
@@ -183,14 +193,15 @@ def predict_food_image(image_bytes: bytes):
     }
 
 def get_image_vector(image_bytes: bytes) -> list[float]:
-    """แปลงรูปภาพเป็น Vector ความยาว 1280 มิติ"""
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = image.resize((224, 224))
     
     image_array = np.array(image).astype("float32")
     image_batch = np.expand_dims(image_array, axis=0)
     
-    features = feature_extractor.predict(image_batch, verbose=0)
+    feature_interpreter.set_tensor(feat_input_details[0]['index'], image_batch)
+    feature_interpreter.invoke()
+    features = feature_interpreter.get_tensor(feat_output_details[0]['index'])
     return features[0].tolist()
     
 def scan_food_image(image_bytes: bytes):

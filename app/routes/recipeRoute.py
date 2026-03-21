@@ -127,7 +127,7 @@ def get_recipe_filter_option(db:Session = Depends(database.get_db)):
     response = recipeService.get_recipe_filter_option(db)
     return StandardResponse.success(data=response)
 
-@router.get("/getSearchRecipeFilterOption", response_model=StandardResponse[list[RecipeResponseDTO]])
+@router.get("/getSearchRecipeFilterOption", response_model=StandardResponse[RecipeWithHighLikeResponseDTO])
 def get_search_recipe_filter_option(categories: list[int] = Query(default=[]), 
                                     tags: list[int] = Query(default=[]),
                                     current_user: MasUserModel | None = Depends(get_current_user_optional), 

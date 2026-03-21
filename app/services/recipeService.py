@@ -1267,6 +1267,7 @@ def get_search_recipe_filter_option(user_id: int | None, categories: list[int], 
         visibility_condition = TrnRecipeModel.is_public == True
 
     filter_options = categories + tags
+    is_user_request_gen_z = False
     if filter_options:
         valid_tags = db.exec(
                 select(MasTagModel).where(MasTagModel.tag_id.in_(filter_options))
@@ -1287,6 +1288,9 @@ def get_search_recipe_filter_option(user_id: int | None, categories: list[int], 
                 
                 if tag_dict[tag_id].tag_type == "category":
                     raise NotFoundException(f"ไม่พบแท็ก (Tag ID: {tag_id}) ในระบบ")
+                
+                if tag_dict[tag_id].tag_name == "Gen Z":
+                    is_user_request_gen_z = True
     
     query = select(
         TrnRecipeModel, 
@@ -1316,11 +1320,33 @@ def get_search_recipe_filter_option(user_id: int | None, categories: list[int], 
         )
     
     result = db.exec(query).all()
-    return [ RecipeResponseDTO.model_validate(
-        recipe, from_attributes=True
-    ).model_copy(
-        update={"like_count": like_count, "is_liked": is_liked > 0}
-    ) for recipe, like_count, is_liked in result]
+
+    gen_z_recipes = []
+    all_recipes = []
+
+    for recipe, like_count, is_liked in result:
+        dto = RecipeResponseDTO.model_validate(
+            recipe, from_attributes=True
+        ).model_copy(
+            update={"like_count": like_count, "is_liked": is_liked > 0}
+        )
+
+        all_recipes.append(dto)
+        if is_user_request_gen_z and "Gen Z" in dto.tags and like_count > 0:
+            gen_z_recipes.append(dto)
+
+    gen_z_recipes.sort(key=lambda x: x.like_count, reverse=True)
+    top5_gen_z_recipes = gen_z_recipes[:5]
+
+    return RecipeWithHighLikeResponseDTO(
+        gen_z_recipes=top5_gen_z_recipes,
+        recipes=all_recipes
+    )
+    # return [ RecipeResponseDTO.model_validate(
+    #     recipe, from_attributes=True
+    # ).model_copy(
+    #     update={"like_count": like_count, "is_liked": is_liked > 0}
+    # ) for recipe, like_count, is_liked in result]
 
 def get_recipe_by_ingredient_name(user_id: int | None, ingredient_list: list[str], tag_list: list[int], db: Session):
     if not ingredient_list:

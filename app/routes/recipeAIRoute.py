@@ -41,4 +41,4 @@ async def generate_new_recipe_by_ai(current_user: Annotated[MasUserModel, Depend
                                     request_body: GenerateRecipeByAI,
                                     db: Session = Depends(database.get_db)):
     response = recipeAIService.generate_new_recipe_by_ai_process(current_user.user_id, request_body.recipe_name, request_body.prompt, db)
-    return StandardResponse.success()
+    return StandardResponse.success(data=response)

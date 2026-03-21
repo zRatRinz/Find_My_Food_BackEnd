@@ -526,11 +526,11 @@ def generate_new_recipe_by_ai_process(user_id: int, recipe_name: str, prompt: st
         db.rollback()
         raise ex
     
-    # created_recipe_ids = [r.recipe_id for r in generated_recipes]
-    # complete_recipes = db.exec(
-    #     select(TrnRecipeModel).where(TrnRecipeModel.recipe_id.in_(created_recipe_ids))
-    # ).all()
+    created_recipe_ids = [r.recipe_id for r in generated_recipes]
+    complete_recipes = db.exec(
+        select(TrnRecipeModel).where(TrnRecipeModel.recipe_id.in_(created_recipe_ids))
+    ).all()
 
     print("✅ AI ประมวลผลสูตรอาหารเรียบร้อยแล้ว")
     print(f"เวลาที่ใช้ทั้งหมด: {time.perf_counter() - total_time:.2f} วินาที")
-    return True
+    return complete_recipes

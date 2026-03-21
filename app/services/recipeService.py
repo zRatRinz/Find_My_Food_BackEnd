@@ -172,7 +172,7 @@ def update_recipe_header_by_recipe_id(db: Session, user_id: int, recipe_id: int,
         raise NotFoundException("ไม่พบสูตรอาหารที่ต้องการแก้ไข")
         
     try:
-        update_data = request_body.model_dump(exclude={"categories", "tags", "is_created_by_ai"}, exclude_unset=True)
+        update_data = request_body.model_dump(exclude={"categories", "tags"}, exclude_unset=True)
         for field, value in update_data.items():
             setattr(recipe, field, value)
 

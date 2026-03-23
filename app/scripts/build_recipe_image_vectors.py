@@ -53,10 +53,14 @@ def process_all_recipe_images(db: Session):
 
     for recipe in recipes:
         existing_vec = db.get(MapRecipeImageVectorModel, recipe.recipe_id)
+        
         if existing_vec:
-            skip_count += 1
-            print(f"⏩ [ID: {recipe.recipe_id}] ข้าม - มีข้อมูลใน DB แล้ว")
-            continue 
+            if existing_vec.source_image_url == recipe.image_url:
+                skip_count += 1
+                print(f"⏩ [ID: {recipe.recipe_id}] ข้าม - มีข้อมูลใน DB แล้ว (รูปเดิมไม่เปลี่ยนแปลง)")
+                continue 
+            else:
+                print(f"🔄 [ID: {recipe.recipe_id}] ตรวจพบการเปลี่ยนรูปภาพ! กำลังสกัด Vector ใหม่...")
 
         try:
             print(f"⏳ [ID: {recipe.recipe_id}] กำลังดาวน์โหลดรูปภาพ...")
@@ -64,16 +68,21 @@ def process_all_recipe_images(db: Session):
             
             if response.status_code == 200:
                 image_bytes = response.content
-                
                 vector_data = get_image_vector_from_bytes(image_bytes)
                 
-                new_image_vec = MapRecipeImageVectorModel(
-                    recipe_id=recipe.recipe_id,
-                    image_vector=vector_data
-                )
-                db.add(new_image_vec)
+                if existing_vec:
+                    existing_vec.image_vector = vector_data
+                    existing_vec.source_image_url = recipe.image_url
+                    db.add(existing_vec)
+                else:
+                    new_image_vec = MapRecipeImageVectorModel(
+                        recipe_id=recipe.recipe_id,
+                        image_vector=vector_data,
+                        source_image_url=recipe.image_url
+                    )
+                    db.add(new_image_vec)
+                    
                 db.commit()
-                
                 success_count += 1
                 print(f"[ID: {recipe.recipe_id}] สกัด Vector และบันทึกสำเร็จ!")
             else:
@@ -85,7 +94,7 @@ def process_all_recipe_images(db: Session):
             fail_count += 1
             print(f"[ID: {recipe.recipe_id}] เกิดข้อผิดพลาด: {str(e)}")
             
-        time.sleep(0.1) 
+        time.sleep(0.1)
 
     print("\n" + "="*40)
     print(f"🎉 สรุปผลการทำงาน:")

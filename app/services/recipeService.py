@@ -1,3 +1,4 @@
+from fastapi import BackgroundTasks
 from sqlmodel import Session, select, delete, func, desc, or_, distinct, intersect, literal
 from sqlalchemy.orm import selectinload, joinedload
 from sklearn.metrics.pairwise import cosine_similarity
@@ -6,7 +7,6 @@ import json
 import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfVectorizer
 from collections import Counter
-
 from app.core import cloudinary, datetimezone, aiConfig
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.models.recipeModel import (
@@ -20,7 +20,7 @@ from app.schemas.recipeDTO import (
     RecipeHeaderResponseDTO, RecipeIngredientResponseDTO, RecipeStepResponseDTO, RecipeDetailResponseDTO, LikeRecipeResponseDTO,
     RecipeWithHighLikeResponseDTO
 )
-from app.services import vectorStoreService
+from app.services import vectorStoreService, recipeAIService
 from app.scripts.build_recipe_vectors import thai_tokenizer
 import time
 
@@ -83,7 +83,7 @@ def tokenize_and_normalize(text):
     tokens = thai_tokenizer(text)
     return [NORMALIZE_MAP.get(t, t) for t in tokens]
 
-def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: int):
+def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: int, background_tasks: BackgroundTasks = None):
     try:
         recipe_data = request_body.model_dump(exclude={"categories", "tags", "ingredients", "steps"})
         new_recipe = TrnRecipeModel(**recipe_data)
@@ -131,6 +131,12 @@ def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: in
                 raise cloudinary_ex
 
         db.commit()
+
+        if background_tasks:
+            background_tasks.add_task(recipeAIService.extract_and_save_text_vector, new_recipe.recipe_id, db)
+            if new_recipe.image_url:
+                background_tasks.add_task(recipeAIService.extract_and_save_image_vector, new_recipe.recipe_id, new_recipe.image_url, db)
+
         return True
 
     except Exception as ex:
@@ -138,7 +144,7 @@ def create_new_recipe(db: Session, request_body: CreateNewRecipeDTO, user_id: in
         db.rollback()
         raise
 
-def update_recipe_image(recipe_id: int, image_url: str, db: Session):
+def update_recipe_image(recipe_id: int, image_url: str, db: Session, background_tasks: BackgroundTasks = None):
     if "food-img/" not in image_url:
         try:
             response = cloudinary.move_temp_image_to_food_folder(recipe_id, image_url)
@@ -155,6 +161,12 @@ def update_recipe_image(recipe_id: int, image_url: str, db: Session):
         recipe.image_url = image_url
         recipe.update_date = datetimezone.get_thai_now()
         db.commit()
+
+        if background_tasks:
+            background_tasks.add_task(recipeAIService.extract_and_save_image_vector, recipe_id, image_url, db)
+        else:
+            recipeAIService.extract_and_save_image_vector(recipe_id, image_url, db)
+
         return True
     except Exception as ex:
         print(f"error: {ex}")

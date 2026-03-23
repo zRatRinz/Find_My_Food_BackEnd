@@ -6,12 +6,20 @@ from google import genai
 from google.genai import types
 import json
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 import base64
+import requests
 from app.core.config import GOOGLE_AI_STUDIO_KEY, GOOGLE_ANALIZE_IMG_MODEL, GOOGLE_IMG_GEN_MODEL, GOOGLE_GEN_CONTENT_MODEL
+from app.core.utils.feature_builder import build_recipe_document
+from app.core import aiConfig
 from app.core.exceptions import NotFoundException
 from app.enums.errorCodeEnum import ErrorCodeEnum
-from app.models.recipeModel import MasTagModel, TrnRecipeModel, MasIngredientModel, DtlRecipeIngredientModel, DtlRecipeStepModel, MapRecipeTagModel
+from app.models.recipeModel import (
+    MasTagModel, TrnRecipeModel, MasIngredientModel, DtlRecipeIngredientModel, DtlRecipeStepModel, 
+    MapRecipeTagModel, MapRecipeImageVectorModel
+)
 from app.models.unitModel import UnitModel
+from app.models.systemModel import SysCacheVersionModel, MapRecipeVectorModel
 from app.schemas.recipeDTO import ScanIngredientResponseDTO, AnalyzeFoodResponseDTO
 from app.services import recipeService
 
@@ -534,3 +542,73 @@ def generate_new_recipe_by_ai_process(user_id: int, recipe_name: str, prompt: st
     print("✅ AI ประมวลผลสูตรอาหารเรียบร้อยแล้ว")
     print(f"เวลาที่ใช้ทั้งหมด: {time.perf_counter() - total_time:.2f} วินาที")
     return complete_recipes
+
+def extract_and_save_text_vector(recipe_id: int, db: Session):
+    try:
+        print(f"[Background Task] กำลังสกัด Text Vector สำหรับ ID: {recipe_id}")
+        
+        recipe = db.exec(
+            select(TrnRecipeModel)
+            .where(TrnRecipeModel.recipe_id == recipe_id)
+            .options(selectinload(TrnRecipeModel.recipe_tags).selectinload(MapRecipeTagModel.tag))
+        ).first()
+
+        if not recipe:
+            return
+
+        doc = build_recipe_document(recipe)
+        
+        matrix = aiConfig.embed_model.encode([doc])
+        vec_list = matrix[0].tolist()
+
+        record = db.get(MapRecipeVectorModel, recipe_id)
+        if record:
+            record.vector_data = vec_list
+        else:
+            record = MapRecipeVectorModel(recipe_id=recipe_id, vector_data=vec_list)
+            db.add(record)
+            
+        config_record = db.get(SysCacheVersionModel, "recipe_vector_version")
+        if config_record:
+            config_record.version_number += 1
+        else:
+            config_record = SysCacheVersionModel(cache_name="recipe_vector_version", version_number=1)
+            db.add(config_record)
+            
+        db.commit()
+        print(f"[Background Task] อัปเดต Text Vector สำเร็จ!")
+        
+    except Exception as e:
+        db.rollback()
+        print(f"[Background Task] สกัด Text Vector ล้มเหลว: {e}")
+
+def extract_and_save_image_vector(recipe_id: int, image_url: str, db: Session):
+    try:
+        print(f"[Background Task] กำลังสกัด Vector รูปภาพใหม่สำหรับ ID: {recipe_id}")
+        response = requests.get(image_url, timeout=10)
+        
+        if response.status_code == 200:
+            image_bytes = response.content
+            vector_data = get_image_vector(image_bytes) 
+            
+            existing_vec = db.get(MapRecipeImageVectorModel, recipe_id)
+            if existing_vec:
+                existing_vec.image_vector = vector_data
+                existing_vec.source_image_url = image_url
+                db.add(existing_vec)
+            else:
+                new_vec = MapRecipeImageVectorModel(
+                    recipe_id=recipe_id,
+                    image_vector=vector_data,
+                    source_image_url=image_url
+                )
+                db.add(new_vec)
+                
+            db.commit()
+            print(f"[Background Task] อัปเดต Vector รูปภาพสำเร็จ!")
+        else:
+            print(f"[Background Task] โหลดรูปไม่สำเร็จ (Status: {response.status_code})")
+            
+    except Exception as e:
+        db.rollback()
+        print(f"[Background Task] เกิดข้อผิดพลาดในการสกัด Vector: {str(e)}")

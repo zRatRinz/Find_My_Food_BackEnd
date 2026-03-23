@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile, Query
+from fastapi import APIRouter, Depends, File, UploadFile, Query, BackgroundTasks
 from typing import Annotated
 from sqlmodel import Session
 from app.core import cloudinary
@@ -23,13 +23,19 @@ async def upload_new_recipe_image(current_user: Annotated[MasUserModel, Depends(
     return StandardResponse.success(data=response)
 
 @router.post("/updateRecipeImage")
-async def update_recipe_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], recipe: UpdateRecipeImageDTO, db:Session = Depends(database.get_db)):
-    response = recipeService.update_recipe_image(recipe.recipe_id, recipe.image_url, db)
+async def update_recipe_image(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
+                              recipe: UpdateRecipeImageDTO,
+                              background_tasks: BackgroundTasks,
+                              db:Session = Depends(database.get_db)):
+    response = recipeService.update_recipe_image(recipe.recipe_id, recipe.image_url, db, background_tasks)
     return StandardResponse.success()
 
 @router.post("/createNewRecipe")
-def create_new_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)], request_body: CreateNewRecipeDTO, db:Session = Depends(database.get_db)):
-        response = recipeService.create_new_recipe(db, request_body, current_user.user_id)
+def create_new_recipe(current_user: Annotated[MasUserModel, Depends(get_current_active_user)],
+                      request_body: CreateNewRecipeDTO,
+                      background_tasks: BackgroundTasks,
+                      db:Session = Depends(database.get_db)):
+        response = recipeService.create_new_recipe(db, request_body, current_user.user_id, background_tasks)
         if not response:
             return StandardResponse.fail(message="บันทึกไม่สำเร็จ")
         return StandardResponse.success()

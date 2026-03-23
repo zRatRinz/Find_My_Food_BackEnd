@@ -130,3 +130,4 @@ class MapRecipeImageVectorModel(SQLModel, table=True):
     __tablename__ = "map_recipe_image_vector"
     recipe_id: int = Field(foreign_key="trn_recipe.recipe_id", primary_key=True)
     image_vector: list[float] | dict = Field(sa_column=Column(JSONB))
+    source_image_url: str | None = None

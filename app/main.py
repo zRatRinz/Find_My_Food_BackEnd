@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.routes import (
     recipeRoute, userRoute, authRoute, shoppingCartRoute, unitRoute, recipeAIRoute, userStockRoute, supportRoute, notificationRoute,
@@ -8,6 +9,16 @@ from app.routes import (
 )
 
 app = FastAPI()
+
+origins = ["*"] 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health", tags=["health"])
 async def health_check():

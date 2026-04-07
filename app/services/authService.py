@@ -142,7 +142,8 @@ def request_otp_process(email: str, db: Session):
 
         db.add(otp_record)
 
-        send_email_result = emailService.send_otp_email_brevo(email, otp)
+        send_email_result = emailService.send_otp_email(email, otp)
+        # send_email_result = emailService.send_otp_email_brevo(email, otp)
         if not send_email_result:
             db.rollback()
             return True

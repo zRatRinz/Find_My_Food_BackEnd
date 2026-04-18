@@ -30,7 +30,8 @@ def login_process(username: str, password: str, db: Session):
             username = user.username,
             birth_date = user.birth_date,
             gender = user.gender,
-            email = user.email
+            email = user.email,
+            image_url=user.image_url
         )
         return TokenResponse(
             access_token = access_token,

@@ -52,6 +52,8 @@ class SimpleUserInfoDTO(BaseModel):
     user_id: int
     email: str
     username: str
+    gender: str | None = None
+    birth_date: date | None = None
     image_url: str | None = None
 
 class UserLikeRecipeDTO(BaseModel):

@@ -173,7 +173,7 @@ def change_user_password(current_user: MasUserModel, request_body: ChangePasswor
         raise
 
 def get_simple_user_info(user_id: int, db: Session):
-    sql = select(MasUserModel.username, MasUserModel.email, MasUserModel.image_url).where(MasUserModel.user_id == user_id)
+    sql = select(MasUserModel.username, MasUserModel.email, MasUserModel.gender, MasUserModel.birth_date, MasUserModel.image_url).where(MasUserModel.user_id == user_id)
     result = db.exec(sql).first()
     if not result:
         raise NotFoundException("ไม่พบผู้ใช้งาน")
@@ -182,6 +182,8 @@ def get_simple_user_info(user_id: int, db: Session):
         user_id = user_id,
         email = result.email,
         username = result.username,
+        gender=result.gender,
+        birth_date=result.birth_date,
         image_url = result.image_url
     )
 
